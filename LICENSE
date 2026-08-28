@@ -1,0 +1,42 @@
+MIT License
+
+Copyright (c) 2026 mahbubk331
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+The MIT licence above covers the code in this repository. Two sets of bundled
+assets are NOT covered by it, and keep their own terms:
+
+  public/fonts/*.woff2   Baloo 2 and Fredoka, SIL Open Font License 1.1.
+                         See public/fonts/LICENSE.txt. Redistributing these
+                         files requires that notice to travel with them.
+
+  public/audio/game-*    Spoken clips generated with Microsoft Edge neural
+  public/audio/kids-*    voices via msedge-tts. Free to generate, but
+                         Microsoft's terms do not clearly grant the right to
+                         redistribute the resulting audio. Treat them as
+                         included for convenience, not as MIT-licensed, and
+                         regenerate them if that distinction matters to you
+                         (see the README's "Where the audio actually comes
+                         from").
+
+  public/audio/sfx-*     Synthesized from scratch with numpy, no samples.
+                         Covered by the MIT licence above.

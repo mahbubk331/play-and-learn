@@ -433,3 +433,16 @@ check compares durations rather than names: several clips are the same length ("
   a punishment. If it does, the fix is small: `Trex` is one component rendered from one
   place in `App.tsx`, the roar is one line, and `sfx-wrong` is still there as the gentle
   alternative.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+Two sets of bundled assets are deliberately carved out of it, because they are not mine to
+relicense:
+
+| | |
+|---|---|
+| `public/fonts/*.woff2` | Baloo 2 and Fredoka, **SIL OFL 1.1** ([notice](public/fonts/LICENSE.txt)). Redistributing the files requires that notice to travel with them. |
+| `public/audio/game-*`, `kids-*` | **Microsoft Edge neural voices**, generated via `msedge-tts`. Included for convenience so a clone runs, not as MIT-licensed. Regenerate them if the distinction matters to you. |
+| `public/audio/sfx-*` | Synthesized from scratch with numpy, no samples. MIT like the code. |
