@@ -1,0 +1,18 @@
+# Committed as LF regardless of the platform it was authored on. Without this, working on
+# Windows checks everything out as CRLF and the first commit from a Mac rewrites every line of
+# every file, which buries a real diff.
+* text=auto eol=lf
+
+# Binary: never touch the bytes, never try to diff them.
+*.wav   binary
+*.woff2 binary
+*.png   binary
+*.jpg   binary
+
+# Generated. Collapse it in diffs and keep it out of language statistics.
+bun.lock linguist-generated=true -diff
+
+# The iOS project is scaffolded by `cap add ios` and refreshed by `cap sync`. It is committed
+# so the app is buildable from a clone, but it is not hand-written code and should not count
+# toward what this repo looks like it is written in.
+ios/** linguist-vendored=true

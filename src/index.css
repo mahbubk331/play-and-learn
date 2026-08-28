@@ -1,0 +1,380 @@
+@import "./fonts.css";
+
+/*
+ * Layout is a fixed 1000x720 stage scaled to fit, so everything here is either about
+ * that scaling or about stopping a browser from doing something unhelpful while a
+ * toddler drags a shape around with their finger.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #f6e3c2;
+  /* A dragged finger must never scroll, rubber-band or select anything. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100%;
+}
+
+.viewport {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stage {
+  position: relative;
+  flex: none;
+  transform-origin: center center;
+  background: #fff3dc;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+/*
+ * The grab layer sits over the whole stage so a pointerdown anywhere picks the block
+ * up. That is deliberate: requiring a hit on the block itself means a child who taps
+ * 30px to the left gets nothing, and a 120px target is not big enough for hands this
+ * size. The board itself has pointer-events: none.
+ */
+.grab {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.block {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+  /* Springy return home. Removed entirely while dragging, below. */
+  transition: transform 340ms cubic-bezier(0.22, 1.4, 0.4, 1);
+  filter: drop-shadow(0 10px 0 rgba(42, 36, 56, 0.16));
+}
+
+/*
+ * No transition while the finger is down. With one, the block lags behind the pointer
+ * by the transition duration, which on a touchscreen feels broken rather than smooth.
+ */
+.block-dragging {
+  transition: none;
+}
+
+/* New block for a new round: pops in at the home position. */
+.block {
+  animation: block-enter 300ms cubic-bezier(0.22, 1.4, 0.4, 1);
+}
+
+@keyframes block-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.wrong-mark {
+  animation: wrong-in 900ms ease-out forwards;
+  transform-origin: 50% 42%;
+}
+
+@keyframes wrong-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-12deg);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1.12) rotate(3deg);
+  }
+  38% {
+    transform: scale(1) rotate(0deg);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+.sparkles span {
+  animation: spark-out 620ms ease-out forwards;
+}
+
+@keyframes spark-out {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.3) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(1) rotate(140deg);
+  }
+}
+
+.star-pop {
+  animation: star-pop 460ms cubic-bezier(0.22, 1.5, 0.4, 1);
+}
+
+@keyframes star-pop {
+  0% {
+    transform: scale(0.4) rotate(-20deg);
+  }
+  60% {
+    transform: scale(1.35) rotate(8deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.score-number {
+  animation: score-bump 380ms ease-out;
+}
+
+@keyframes score-bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.4);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 243, 220, 0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  animation: fade-in 320ms ease-out;
+  /* Overlays swallow taps, so a stray finger during a card cannot start a drag on
+     the round underneath it. */
+  pointer-events: auto;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * Oversized on purpose. The person who has to press this has poor aim and cannot read,
+ * and the alternative to a button they can hit is a parent restarting the game every
+ * ninety seconds.
+ */
+.replay {
+  margin-top: 8px;
+  padding: 22px 64px;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 46px;
+  color: #2a2438;
+  background: #ffd34e;
+  border: 8px solid #2a2438;
+  border-radius: 999px;
+  box-shadow: 0 12px 0 rgba(42, 36, 56, 0.16);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.replay:active {
+  transform: translateY(6px);
+  box-shadow: 0 6px 0 rgba(42, 36, 56, 0.16);
+}
+
+
+/*
+ * The critter arrives from off-screen right, applauds, and leaves. The wrapper carries the
+ * travel and a happy bounce; the jaw carries the laugh; the two arms carry the clap. All
+ * four share one duration so they stay in step, and it matches TREX_ANIM_MS in game.ts,
+ * which is what stops the round advancing mid-applause.
+ */
+.critter {
+  animation: critter-move 1500ms ease-out forwards;
+  transform-origin: 50% 80%;
+  filter: drop-shadow(0 12px 0 rgba(42, 36, 56, 0.16));
+}
+
+/*
+ * A bounce, not a lunge. The roaring version scaled up to come AT the viewer; applause is
+ * an up-and-down, so this hops on the same beat as the claps below.
+ */
+@keyframes critter-move {
+  0% {
+    transform: translateX(430px) rotate(7deg);
+    opacity: 0;
+  }
+  13% {
+    transform: translateX(0) rotate(0deg) translateY(0);
+    opacity: 1;
+  }
+  24% {
+    transform: translateY(-16px) scale(1.04);
+  }
+  36% {
+    transform: translateY(0) scale(1);
+  }
+  48% {
+    transform: translateY(-13px) scale(1.03);
+  }
+  60% {
+    transform: translateY(0) scale(1);
+  }
+  70% {
+    transform: translateY(-8px) scale(1.02);
+  }
+  80% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(430px) rotate(7deg);
+    opacity: 0;
+  }
+}
+
+/*
+ * The jaw DROPS, it does not rotate. With the head facing the camera the hinge axis points
+ * at the viewer, so a 2D rotation would swing the chin sideways across the face.
+ * `transform-box: view-box` keeps the translate in viewBox units so it scales with the
+ * drawing.
+ *
+ * Shallower and pulsier than the roar version: this is laughing along with the clapping,
+ * not a single held bellow.
+ */
+.critter-jaw {
+  animation: critter-jaw 1500ms ease-out forwards;
+  transform-box: view-box;
+  /* Inherit so the dev gallery can freeze every part of the animation from one place. */
+  animation-delay: inherit;
+  animation-play-state: inherit;
+}
+
+@keyframes critter-jaw {
+  0%,
+  13% {
+    transform: translateY(0);
+  }
+  24% {
+    transform: translateY(13px);
+  }
+  36% {
+    transform: translateY(4px);
+  }
+  48% {
+    transform: translateY(12px);
+  }
+  60% {
+    transform: translateY(4px);
+  }
+  70% {
+    transform: translateY(9px);
+  }
+  82% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/*
+ * The clap. Both arms swing toward the head's centre line and meet, three times, on the
+ * same beats as the bounce and the laugh. Mirrored values, one keyframe set each.
+ */
+.critter-arm-l,
+.critter-arm-r {
+  animation-duration: 1500ms;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: forwards;
+  transform-box: view-box;
+  animation-delay: inherit;
+  animation-play-state: inherit;
+}
+
+.critter-arm-l {
+  animation-name: critter-clap-l;
+}
+
+.critter-arm-r {
+  animation-name: critter-clap-r;
+}
+
+@keyframes critter-clap-l {
+  0%,
+  13% {
+    transform: translateX(0) rotate(0deg);
+  }
+  22% {
+    transform: translateX(11px) rotate(-9deg);
+  }
+  32% {
+    transform: translateX(0) rotate(0deg);
+  }
+  44% {
+    transform: translateX(11px) rotate(-9deg);
+  }
+  56% {
+    transform: translateX(0) rotate(0deg);
+  }
+  68% {
+    transform: translateX(10px) rotate(-8deg);
+  }
+  80%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+@keyframes critter-clap-r {
+  0%,
+  13% {
+    transform: translateX(0) rotate(0deg);
+  }
+  22% {
+    transform: translateX(-11px) rotate(9deg);
+  }
+  32% {
+    transform: translateX(0) rotate(0deg);
+  }
+  44% {
+    transform: translateX(-11px) rotate(9deg);
+  }
+  56% {
+    transform: translateX(0) rotate(0deg);
+  }
+  68% {
+    transform: translateX(-10px) rotate(8deg);
+  }
+  80%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+}

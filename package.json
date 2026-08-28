@@ -1,0 +1,36 @@
+{
+  "name": "shape-game",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Wrong-Shape Machine - drag-and-drop shape game for 2-5 year olds",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "sync": "bun run scripts/sync-shapes.mjs",
+    "prebuild": "bun run scripts/sync-shapes.mjs --check",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "ios": "bun run build && cap sync ios",
+    "assets": "echo \"Render resources/icon.png + splash.png: see README > App Store\"",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/screen-orientation": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "5.9.3",
+    "vite": "^6.0.7"
+  }
+}

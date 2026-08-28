@@ -1,0 +1,40 @@
+/*
+ * Bundled webfonts. See the README's "Bundled fonts" section to regenerate.
+ *
+ * BUNDLED rather than loaded from Google's CDN, for three reasons that all point the same
+ * way:
+ *
+ *   1. App Store kids category. A children's app calling a third-party CDN transmits the
+ *      device's IP to Google on every launch. Apple restricts third-party services in that
+ *      category, and it is a data-collection disclosure nobody wants to make for a game that
+ *      otherwise collects nothing at all.
+ *   2. Offline. A tablet in a car has no network, and without these the game falls back to a
+ *      system face at different metrics — every label and numeral shifts.
+ *   3. Review guideline 4.2 (minimum functionality). An app that needs the internet to draw
+ *      its own text looks more like a repackaged website, which is what thin web wrappers get
+ *      rejected for.
+ *
+ * Latin subset only. Both families are VARIABLE fonts, so one file each covers the whole
+ * weight range — hence a weight range in the descriptor rather than Google's one-block-per-
+ * weight output, which repeated the same URL five times.
+ *
+ * 63 KB for both.
+ */
+
+@font-face {
+  font-family: 'Baloo 2';
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: block;
+  src: url('/fonts/baloo-2-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Fredoka';
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: block;
+  src: url('/fonts/fredoka-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
