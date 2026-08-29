@@ -4,15 +4,16 @@ The playable version of the [Wrong-Shape Machine](../remotion-app/src/wrongshape
 video. A block appears, its shape is spoken aloud, and you drag it to the hole it fits.
 
 - **Right hole** → **one of five animals runs in and applauds** — dinosaur, tiger, lion,
-  monkey or cow, picked at random — plus applause, a child shouting "Hooray!", and a
-  progress star
+  monkey or cow, picked at random — plus applause, **a different word of praise every time**
+  ("Good job!", "Great work!", "Keep it up!", or the recorded "Hooray!"), and a progress star
 - **Wrong hole** → a big red X on the hole you chose, a knock and a soft "no" tone, and one
   of three tries is spent
 - **Three wrong tries** → "Let's try again!" and the level restarts
 - **Level complete** → 1–3 stars depending on how many tries it took, then the next level
 
-Thirteen levels — three of **colours**, three of shapes, seven of numbers — then a total
-out of 39 stars.
+**Four games, chosen from a picker** — colours, shapes, numbers, letters — with their own
+levels, their own level numbering and their own saved progress. Eighteen levels in total, and
+54 stars.
 
 ## Commands
 
@@ -25,9 +26,15 @@ bun run preview        # serve the build
 bun run lint           # tsc --noEmit
 ```
 
-Regenerating audio (all of it lives in the Remotion project):
+Regenerating audio. The letter and praise clips are generated **from this repo**; everything
+else still lives in the Remotion project:
 
 ```bash
+# letters + praise. Needs two packages that are deliberately not dependencies:
+bun add -d msedge-tts playwright-core
+node scripts/gen-voice.mjs           # write public/audio/game-l*.wav, game-p*.wav
+node scripts/gen-voice.mjs --check   # verify pronunciation, write nothing
+
 cd ../remotion-app
 python scripts/gen-kids-sfx.py       # clap, bonk, wrong tone, T-rex roar
 bun run voice shapegame              # spoken shape names + phrases
@@ -35,23 +42,62 @@ bun run voice kids                   # the shared "Hooray!"
 python scripts/export-game-audio.py  # trim + copy into this project
 ```
 
-## Levels
+## The four games
 
-**Colours, then shapes, then numerals** — the order a child acquires the skills, so the first
-level is winnable immediately.
+The home screen is a picker with four cards ([Menu.tsx](src/components/Menu.tsx)). Tap one and
+you are in that track, at the level it was last left on; the grid button in the HUD comes back
+here.
 
-| Level | Rounds | Tokens | Board | Blocks |
-|---|---|---|---|---|
-| 1 | 6 | **4 of 7 colours** | fixed order | — |
-| 2 | 8 | 4 of 7 colours | shuffled | — |
-| 3 | 8 | 4 of 7 colours | shuffled | — |
-| 4 | 6 | 4 shapes | fixed order | upright |
-| 5 | 8 | 4 shapes | shuffled | upright |
-| 6 | 8 | 4 shapes | shuffled | rotated up to 32 deg |
-| 7 | 6 | numbers **1-5** | shuffled | upright |
-| 8 | 8 | numbers **1-10** | shuffled | upright |
-| 9-12 | 8 | numbers 1-12 ... 1-18 | shuffled | upright |
-| 13 | 8 | numbers **1-20** | shuffled | upright |
+**It used to be one thirteen-level ladder** — colours, then shapes, then numbers, in the order a
+child acquires the skills. That ordering was right about the skills and wrong about the child in
+front of the tablet: a two-year-old working on colours had to be walked past the shape and
+number levels by an adult, and a four-year-old who wanted numbers had to sit through six levels
+of things they already knew.
+
+| Track | Levels | Stars | What it asks |
+|---|---|---|---|
+| **Colours** | 3 | 9 | drop the ball in the matching coloured hole |
+| **Shapes** | 3 | 9 | circle, square, triangle, star |
+| **Numbers** | 7 | 21 | numerals, 1 to 20 |
+| **Letters** | 5 | 15 | capitals, A to Z |
+
+**Nothing is locked.** The card order is still the acquisition order, and it is a
+recommendation. A gate would mean a four-year-old who is ready for letters has to be walked
+through colours first, and the person doing the walking is the one holding the tablet.
+
+The picker is designed for two readers at once, which is the whole difficulty of that screen.
+The child cannot read a word of it, so every card leads with a picture of what the track
+actually asks for — four coloured dots, the four outlines, "123", "ABC" — drawn from the same
+`SHAPES` polygons and `HUES` values the board uses, so a card cannot advertise a game the track
+does not contain. The adult is the one choosing, and needs the blurb and the star count.
+
+**Opening the app no longer resumes into a level**, which it used to do. It cannot: there are
+four tracks and no way to know which one the child wants today, and guessing "the one they
+played last" would drop a child who wanted letters into numbers with no explanation. The saved
+progress is still used — it is just presented as a choice rather than acted on, one resume point
+per card.
+
+### The levels in each track
+
+| Track | Level | Rounds | Tokens | Board | Blocks |
+|---|---|---|---|---|---|
+| Colours | 1 | 6 | **4 of 7 colours** | fixed order | — |
+| Colours | 2-3 | 8 | 4 of 7 colours | shuffled | — |
+| Shapes | 1 | 6 | 4 shapes | fixed order | upright |
+| Shapes | 2 | 8 | 4 shapes | shuffled | upright |
+| Shapes | 3 | 8 | 4 shapes | shuffled | rotated up to 32 deg |
+| Numbers | 1 | 6 | numbers **1-5** | shuffled | upright |
+| Numbers | 2 | 8 | numbers **1-10** | shuffled | upright |
+| Numbers | 3-6 | 8 | numbers 1-12 ... 1-18 | shuffled | upright |
+| Numbers | 7 | 8 | numbers **1-20** | shuffled | upright |
+| Letters | 1 | 6 | letters **A-E** | alphabetical | upright |
+| Letters | 2 | 8 | letters **A-J** | shuffled | upright |
+| Letters | 3-4 | 8 | letters A-P, A-U | shuffled | upright |
+| Letters | 5 | 8 | letters **A-Z** | shuffled | upright |
+
+Level 1 of every track keeps its holes in their natural order — shapes as authored, hues in
+palette order, numerals and letters ascending. That is the same promise the video series makes,
+and it is what lets a new player answer by position before they can answer by shape.
 
 ### The colour levels
 
@@ -69,8 +115,8 @@ block appears. A colour-blind child can play by word and by position.
 ### The shape levels
 
 "Harder" cannot mean "more shapes" — there are only four. It means removing the crutches, in the
-order a child stops needing them: level 4's fixed order lets them answer by position (a real
-intermediate step, not cheating), level 5 takes that away, level 6 additionally requires
+order a child stops needing them: level 1's fixed order lets them answer by position (a real
+intermediate step, not cheating), level 2 takes that away, level 3 additionally requires
 recognising an outline independently of its orientation.
 
 ### The number levels
@@ -82,21 +128,63 @@ they were. A replay draws a different four.
 
 **Rotation stays off here.** A rotated numeral is a different and much harder question than a
 rotated triangle — 6 and 9 stop being distinguishable at all — and it is not the skill these
-levels are for.
+levels are for. The same goes for letters, where it would also collapse M into W.
 
-### One game, not three
+### The letter levels
 
-Rather than fork into three games, everything downstream works on a **token**
-([tokens.ts](src/tokens.ts)), and a level only says which kind it deals in. The board, the
-block, the drag, the matching and the spoken cue are all shared.
+The same shape of ramp as numbers, over A-E, A-J, A-P, A-U, A-Z: four holes throughout, a
+widening pool to draw them from.
 
-The three kinds differ in what carries the cue, and each choice is forced:
+**Uppercase only** ([letters.ts](src/letters.ts)), and that is a decision rather than a
+shortcut. Two reasons, and the second is mechanical:
+
+1. Capitals are the forms a two-to-five year old meets first, and they are far more distinct
+   from each other than lowercase is — b, d, p and q are four rotations of one shape, and a game
+   whose entire premise is "does this fit that hole" would be teaching the confusion rather than
+   the letters.
+2. Every capital sits on the baseline inside one cap height. A hole is a cut-out of its letter,
+   so a descender (g, j, p, q, y) would punch through the bottom edge of the board and into the
+   strip where the printed labels go. Uppercase keeps every hole on the board face without
+   special-casing nine letters.
+
+No letter is left out. I and O are the thin ones and their cut-outs are narrow slots, but that
+is only a visual matter: the drop test is distance to the hole **centre**, never whether the
+block is inside the outline, so a narrow hole is exactly as easy to hit as a wide one.
+
+Letters are drawn at 100% of the base size against a single digit's 105%, because "W" and "M"
+are the widest glyphs in the font by some margin and their hole — cut at `HOLE_SCALE`, so 16%
+wider again — has to stay clear of the gap to the next hole. Sizing them per letter was the
+alternative and it is worse: the holes would then be visibly different sizes, which is a cue
+about which letter it is that has nothing to do with reading it.
+
+**The letter track has no recorded voice yet.** See [Sound](#sound) — it is the one real gap in
+the feature.
+
+### One game, not four
+
+The tracks are four **level lists**, not four games. Everything downstream works on a **token**
+([tokens.ts](src/tokens.ts)), and a level only says which kind it deals in — the board, the
+block, the drag, the matching, the scoring and the spoken cue are all one implementation.
+Picking "Letters" on the picker selects a level list; it does not select a code path. Adding a
+fifth track is an entry in `TRACKS` ([tracks.ts](src/tracks.ts)) plus a token kind.
+
+A track's id **is** its token kind and **is** the key its progress is stored under, so there is
+one identifier for "which game is this" rather than three that have to agree.
+
+The four kinds differ in what carries the cue, and each choice is forced:
 
 | kind | the cue |
 |---|---|
 | **shape** | the hole is a cut-out of that shape; the printed word is a bonus |
 | **number** | the hole is a cut-out of the digits, so a "7" drops into a 7-shaped hole |
+| **letter** | the same, one letter at a time: an "R" drops into an R-shaped hole |
 | **colour** | every hole is the same circle, because a colour cannot be a shape. The coloured rim is the cue, and the name is printed and spoken. The one kind where a block physically fits any hole — unavoidable, and exactly how the Sorting Factory video works |
+
+Adding the letter kind is also what turned `makeArrangement`'s mode dispatch from a ternary
+chain into a **switch**, and the difference is not style. The chain tested for "shape", then
+"colour", and treated *everything else* as numbers — so the letter mode would have produced a
+board full of numerals with no error anywhere. A switch over the `Mode` union means TypeScript
+rejects the file until every mode is handled.
 
 **A hole is the shape of its token — including the numerals.** A number block *is* the digit
 "7", and it drops into a 7-shaped cut-out. Number holes started as identical squares with the
@@ -121,9 +209,9 @@ Shape holes still print their word underneath, small. Number holes print nothing
 the numeral, so a printed one would be the same information twice.
 
 Rounds are drawn **from the arrangement**, not from the whole token space, which is what
-stops a number level asking for a numeral that is not on the board. The four numerals per
-board are always distinct — two holes wanting the same number would make one unreachable and
-the other ambiguous.
+stops a number level asking for a numeral — or a letter level asking for a letter — that is not
+on the board. The four tokens per board are always distinct: two holes wanting the same thing
+would make one unreachable and the other ambiguous.
 
 ## Scoring
 
@@ -136,11 +224,24 @@ Stars per level come from the number of wrong tries, since a third wrong restart
 | 2 | ★ |
 
 Never zero — a level you finished is a level you finished, and a zero-star result for
-completing something reads as a failure. Maximum is 39 across the thirteen levels.
+completing something reads as a failure. Maximum is 54 across the eighteen levels: 9 for
+colours, 9 for shapes, 21 for numbers, 15 for letters.
 
 The card also spells out the try count, because the stars are derived from it and
 showing only the stars leaves the scoring feeling arbitrary to the adult in the room,
 who is the person reading it.
+
+**Stars are counted per track, and the HUD shows the current track's total.** A running total
+across all four would climb while you played colours because of numbers you finished yesterday,
+which tells a child nothing about what they are doing now. The all-four total is on the picker,
+where it is the answer to a question somebody is actually asking. The end-of-track card is the
+same: 9/9 for finishing colours, not 9/54, because the second reads as a failure.
+
+Finishing a track offers **Pick a game** first and **Play again** second. Finishing is the
+natural moment to try a different track — a child who has just finished colours is exactly who
+the shapes track is for — and before the split there was nowhere else to go, so the only offer
+was a replay. Replaying is still there, second, and it zeroes **that track only**: a child
+replaying colours does not lose the number stars they earned yesterday.
 
 ## The three-try restart, and a caveat
 
@@ -256,23 +357,31 @@ three-year-old to stop guessing, and guessing is the activity.
 
 ### Saved progress carries a version, and a mismatch resets it
 
-Progress is `{levelIndex, stars}` — an **index into `LEVELS`**. That is fine until the level
-list changes shape: inserting the three colour levels at the front turned a stored "index 4"
-from a number level into shape level 5, so anyone with saved progress reopened the game
-**past the new levels** with no indication anything had happened. The game was not wrong by
-its own rules; the record simply meant something different than when it was written.
+Progress is `{ v, tracks: { [trackId]: {levelIndex, stars} } }` — a **per-track index into that
+track's level list**. An index is fine until the list changes shape: inserting the three colour
+levels at the front of the old single ladder turned a stored "index 4" from a number level into
+shape level 5, so anyone with saved progress reopened the game **past the new levels** with no
+indication anything had happened. The game was not wrong by its own rules; the record simply
+meant something different than when it was written.
 
 So the record stores `LEVELS_VERSION` too, and `loadProgress` discards anything that does not
-match — including unversioned records, which by definition predate the colour levels. Throwing
-away a few banked stars is by far the cheaper failure.
+match. That includes unversioned records and versions 1 and 2, which predate the split and
+stored a single index into one thirteen-level ladder — there is no honest way to map that onto
+four tracks. Throwing away a few banked stars is by far the cheaper failure.
 
-Two details that matter more than they look:
+Five details that matter more than they look:
 
 - The version is stamped inside `saveProgress`, not passed in by callers, so no call site can
   omit it.
-- `LEVELS_VERSION` lives in [levels.ts](src/levels.ts) beside the array it describes, because
-  that is the file someone edits when they cause the problem. Appending to the end of `LEVELS`
-  is the one safe change; anything else needs a bump.
+- `LEVELS_VERSION` lives in [levels.ts](src/levels.ts) beside the arrays it describes, because
+  that is the file someone edits when they cause the problem. Appending a level to the **end** of
+  a track is the one safe change; anything else needs a bump.
+- **Adding a whole track is safe too**, and does not need a bump: the map is keyed by track id
+  and a track with no entry simply starts at level 1. That is why the stored type is a partial
+  record rather than a complete one.
+- One corrupt track entry loses that track, not the other three. Validation is per entry.
+- A level completion writes **one** track's slot and carries the other three through untouched,
+  which is the entire point of keying progress by track.
 
 ## It shares the shapes with the video
 
@@ -296,7 +405,7 @@ Fonts come from the Google Fonts CDN, linked in `index.html`.
 
 ## Sound
 
-Thirty-eight clips in `public/audio/`, all generated rather than sourced — none of them bought,
+Seventy-two clips in `public/audio/`, all generated rather than sourced — none of them bought,
 and none of them from a sample library:
 
 | clip | what |
@@ -311,6 +420,95 @@ and none of them from a sample library:
 | `game-cred.wav` ... `game-cpink.wav` | the seven colour names, spoken |
 | `game-tryagain.wav` | "Let's try again" |
 | `game-nextlevel.wav` | "Well done! Next level" |
+| `game-lA.wav` ... `game-lZ.wav` | the twenty-six letter names, spoken |
+| `game-pgoodjob.wav` ... | the eight praise lines, spoken |
+
+### Praise on a correct answer varies
+
+A correct drop plays the applause and then **one of nine lines**: the recorded "Hooray!" plus
+eight spoken ones — "Good job!", "Great work!", "Keep it up!", "Well done!", "Nice one!", "You
+got it!", "Brilliant!", "That's it!".
+
+One fixed response, which is what the recorded cheer was on its own, stops being information
+after the third time you hear it — and the reward beat is the single thing in this game most
+worth keeping alive. Nine lines means a child has to get nine right before anything can repeat,
+and `pickPraise` never repeats back-to-back even then (the same no-repeat rule, for the same
+reason, as `pickSpecies` for the animals).
+
+**The recorded "Hooray!" stays in the rotation** rather than being replaced by it. It is the only
+one of the nine in the child's voice used everywhere else in the app, so it is the best of them —
+it just should not be the only one.
+
+The applause fires on the instant the block seats, and the praise is held back **220ms**.
+Applause is broadband noise and a simultaneous "Good job!" is close to unintelligible
+underneath it; the delay puts the words in the tail of the clap. That was true of the recorded
+"Hooray!" as well and simply mattered less when the words never changed. The longest line is
+about 900ms, comfortably inside `CORRECT_HOLD` (1.7s), so nothing is still talking when the next
+block arrives.
+
+### The letter and praise clips, and the synthesiser that used to stand in for them
+
+The letter track and the varied praise came after this repo was split off from the Remotion
+project, so the pipeline that made the other clips was not available. The first cut shipped them
+through `window.speechSynthesis` instead, and **that was the right call to reject**: it sounded
+like a screen reader. Worth recording why, because the failure is not obvious in advance.
+
+Voice *selection* can only choose from what a device happens to have installed. Left to itself
+`speechSynthesis` uses the platform default, which on Windows is usually David or Zira —
+2013-era concatenative SAPI voices. Scoring the inventory to prefer `natural`/`neural`/`online`
+families genuinely helped where a neural voice was present, and did nothing at all where one was
+not. Rate and pitch tuning is cosmetic next to that. A per-device lottery for how the app sounds
+is not a thing you can tune your way out of.
+
+So the clips are recorded, from the same source as the others: **Microsoft Edge neural voices
+over the read-aloud endpoint**, via [scripts/gen-voice.mjs](scripts/gen-voice.mjs). Same
+provenance, so the letter track matches the rest of the game rather than sitting next to it — and
+the same redistribution caveat applies. `speechSynthesis` is gone from the app entirely; there is
+no fallback path left.
+
+**The voice is `en-GB-LibbyNeural`**, chosen by ear from a seven-voice audition spanning child and
+adult, US and GB. Being British is not incidental: it gives "zed" and "aitch" for Z and H without
+either being hard-coded.
+
+Three things about generating them that were not obvious:
+
+- **The endpoint rejects `<say-as interpret-as="characters">`** — it closes the websocket
+  mid-synthesis. That would have been the clean way to force letter names, so the names have to
+  come from the spelling instead. Verified, not assumed: `say-as` failed and plain text succeeded
+  on the same voice in the same run.
+- **Only mp3 and opus come back** (`riff-24khz-16bit-mono-pcm` is refused), and the only ffmpeg
+  likely to be on a dev machine here is Playwright's video-only build with no mp3 decoder. So the
+  script decodes through **Chromium**, which handles mp3 natively and resamples to the context
+  rate on the way — which is how the output lands at mono 48kHz 16-bit, matching every clip that
+  was already there.
+- **Trimming is not optional.** The endpoint pads short clips with up to 1.25s of silence, which
+  on a one-syllable letter is most of the file. Same reason `export-game-audio.py` strips it for
+  the video-pipeline clips: a cue that starts a quarter-second after the block appears reads as
+  lag. The letters come out 0.33–0.75s, the praise lines 0.59–0.86s, against ~0.68s for the
+  existing shape names.
+
+**On pronunciation, which is the part worth measuring.** The bare character is the right input
+for 24 of the 26 letters. The two exceptions are the ones whose bare character is also a common
+English word, and *which* of the two needs help depends on the accent — established by
+cross-correlating the two renderings, since identical input phonemes produce byte-identical
+audio from this engine (a "B" vs "B" control gives exactly 1.00):
+
+| | bare `A` | bare `I` |
+|---|---|---|
+| **US voices** | the indefinite article — needs `"ay"` | already correct |
+| **GB voices** | already correct (corr 1.00) | *not* "eye" (corr −0.07) — needs `"eye"` |
+
+Each is only wrong on one side of the Atlantic, so the one `{A: "ay", I: "eye"}` table is correct
+for any voice. `--check` re-runs that comparison for all 26 against an independent spelling of
+each letter name; a mismatch indicts whichever side is more doubtful, and the respelling is often
+the doubtful one — the first pass flagged G, N, U and W, and in every case the *respelling* was
+the error ("jee" not "gee", "double you" not "double-you"). **E and W matched no spelling tried**
+and are the two the automated check cannot vouch for; both were confirmed by listening instead.
+Their durations were the supporting evidence: W is 0.75s, the longest of the twenty-six, as
+"double-you" requires, and E is 0.33s, one long vowel.
+
+The praise clip **id is the filename** (`game-pgoodjob.wav`), not an array index. Praise was
+keyed by index first, which meant reordering the list would have silently repointed every clip.
 
 ### Where the audio actually comes from
 
@@ -366,6 +564,59 @@ finger must never scroll, rubber-band, select text or pinch-zoom the board away.
 
 ## Verified
 
+> **The suite below predates the split into four tracks, and it is not checked into this
+> repository** — `gamekit.py` and the eight suites live wherever they were run from, so they
+> could not be re-run here. Nine of its checks assert the old single ladder and are now wrong by
+> construction: *level 1 is colours*, *level 4 switches to shapes*, *resumes on level 7*, *every
+> one of 98 rounds across all 13 levels*, *resumes on the next level*, and the four
+> stale-record cases (the format changed, so the "current-version record still resumes" case
+> needs rewriting against the per-track map). Everything else — feedback paths, audio, animals,
+> the restart rule, offline — is untouched by the split and should still hold.
+>
+> What was actually run for the split, with Playwright driving the dev server:
+>
+> ```
+> picker         four cards render with the right titles, blurbs, per-track
+>                maxima (9/9/21/15) and 0/54 total
+> every track    opens from its card, board and block are the right kind
+>                (colour rims, shape outlines, 1-5 numerals, A-E letters)
+> hud button     returns to the picker from all four tracks
+> playthrough    all 3 shape levels, 22 correct drags, zero wrong drops,
+>                including the rotated blocks on level 3
+> cards          level-done card per level; end-of-track card shows
+>                "Shapes - every level", 9/9, and both buttons
+> persistence    stored as {"v":3,"tracks":{"shape":{"levelIndex":2,"stars":9}}}
+>                - only the played track written, survives a reload
+> stale record   a v2 record is discarded, not misread: all four tracks
+>                return to 0 rather than resuming at a bogus index
+> console        no errors or page errors on any screen
+>
+> all 4 tracks   level 1 of colours, shapes, numbers AND letters played to
+>                completion - 24 rounds, 24 correct drops, zero wrong
+> voice choice   against a simulated default-Windows inventory (David, Zira,
+>                Aria Online Natural, Google US English, fr-FR Denise,
+>                en-IN Ravi) it picks Aria Online (Natural)
+> letter cues    spoken per round; "A" comes out as "ay", not the article
+> praise         24 correct drops -> 22 spoken lines + 2 recorded "Hooray!",
+>                7 distinct, zero back-to-back repeats
+>
+> recorded audio all 34 new clips fetch AND decode (a 200 that is not valid
+>                audio would be swallowed by the engine's try/catch), all
+>                mono 48kHz matching the existing clips, 0.33-0.86s
+> no fallback    speechSynthesis.speak is monkey-patched to count calls;
+>                a full letters level makes zero of them
+> pronunciation  24 of 26 letters confirmed against an independent spelling
+>                producing byte-identical audio; "B" vs "B" control = 1.00
+> ```
+>
+> The board reader used for that is token-kind agnostic — glyph holes by their text, shapes by
+> vertex count, colours by the block's fill against the printed name — which is what let the
+> letter and number tracks be played rather than just screenshotted.
+>
+> Not covered, and worth doing before this ships to a child: the three-wrong restart inside a
+> track, the letter track above level 1 (levels 2-5 shuffle and widen to A-Z), how any of the
+> spoken audio actually sounds on a real iOS device, and anything at all on a real touchscreen.
+
 Driven end to end with Playwright. Shared helpers live in one `gamekit.py`, consolidated after
 the level structure changed three times and each change broke every suite's private copy of
 "read the board" in a slightly different way.
@@ -419,9 +670,26 @@ check compares durations rather than names: several clips are the same length ("
   keyframes and Web Audio are a genuine rewrite. That route also removes the Mac requirement
   entirely, since EAS Build compiles in the cloud and Expo Go tests on a real device from
   Windows.
-- **Only four holes.** That bounds a number level to four numerals per attempt, so level 13
-  shows four of twenty rather than covering the range. Widening it means shrinking
-  `SHAPE_PX` or going to two rows.
+- **The letters are an adult voice; the "Hooray!" is a child's.** All 34 new clips are
+  `en-GB-LibbyNeural`. Signed off by ear, so this is a decision rather than an oversight — but
+  if that inconsistency ever starts to grate, Ana (`en-US-AnaNeural`) and Maisie
+  (`en-GB-MaisieNeural`) are Microsoft's child voices and swapping is one line in
+  `scripts/gen-voice.mjs` plus a re-run.
+- **`scripts/gen-voice.mjs` needs two packages that are not in `package.json`** (`msedge-tts`,
+  `playwright-core`). Deliberate — the clips are committed and the script runs approximately
+  never, so neither belongs in the app's dependency tree. It prints what to install.
+- **Only four holes.** That bounds a number level to four numerals per attempt, so the last
+  number level shows four of twenty rather than covering the range — and the last letter level
+  four of twenty-six. Widening it means shrinking `SHAPE_PX` or going to two rows.
+- **No lowercase letters.** Deliberate (see [The letter levels](#the-letter-levels)), but a
+  later track that pairs "A" with "a" is the obvious next step, and it needs a token kind that
+  holds two glyphs rather than one.
+- **The picker has no reset.** Progress can only be cleared per track, by finishing one and
+  tapping Play again. `clearProgress` wipes everything and nothing calls it — a long-press on
+  the picker's star total is the obvious home for it.
+- **The native app is still called "Shape Machine"** (`capacitor.config.ts`, `index.html`)
+  while the picker is headed "Play and Learn". Renaming touches the App Store identity, so it
+  is left alone deliberately rather than overlooked.
 - **No counting, only recognition.** A level that showed *three dots* and wanted the numeral 3
   would teach more, and the token model has room for it — a fourth kind with a dot-pattern face.
 - **No colour mixing.** Red + blue = purple is the obvious next colour level, and all seven hues

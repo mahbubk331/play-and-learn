@@ -19,44 +19,66 @@
 import type { Level } from "./levels";
 import { SHAPES } from "./stage";
 import { HOLES_PER_BOARD, HUES } from "./hues";
+import { MAX_LETTER } from "./letters";
 import type { Token } from "./tokens";
 
 export type Round = {
   token: Token;
-  /** Degrees. Only ever non-zero on level 3. */
+  /** Degrees. Only ever non-zero on the last level of the SHAPES track. */
   rotation: number;
+};
+
+/**
+ * The four tokens a level's board is built from, before shuffling.
+ *
+ * A SWITCH rather than the ternary chain this used to be, and the difference is not style. The
+ * chain tested for "shape", then "color", and treated *everything else* as numbers — so adding
+ * the letter mode would have produced a board full of numerals with no error anywhere. A switch
+ * over the `Mode` union means TypeScript rejects the file until every mode is handled.
+ *
+ * Every kind draws four DISTINCT values. Distinct matters everywhere: two holes wanting the same
+ * thing would make one of them unreachable and the other ambiguous.
+ */
+const boardTokens = (level: Level, slots: number): Token[] => {
+  switch (level.mode) {
+    case "shape":
+      // All four shapes, always, in their authored order.
+      return SHAPES.map((_, i) => ({ kind: "shape", shape: i }));
+    // Four of the seven hues, in palette order so the board is not also scrambled before
+    // shuffleHoles has had its say.
+    case "color":
+      return drawDistinct(HUES.length, slots).map((i) => ({
+        kind: "color",
+        color: i - 1,
+      }));
+    case "number":
+      return drawDistinct(level.numberMax ?? 5, slots).map((value) => ({
+        kind: "number",
+        value,
+      }));
+    // drawDistinct works in 1..max, ALPHABET is indexed from 0, hence the -1. Same shift as
+    // the colour case, for the same reason.
+    case "letter":
+      return drawDistinct(level.letterMax ?? MAX_LETTER, slots).map((i) => ({
+        kind: "letter",
+        letter: i - 1,
+      }));
+  }
 };
 
 /**
  * Which token sits at which hole: `arrangement[position]`.
  *
- * Level 1 is the shapes in their authored order, so the circle hole is the first hole — the
- * same promise the video series makes, and what lets a new player answer by position before
- * they can answer by shape. Later levels shuffle it.
- *
- * Number levels draw four DISTINCT numerals from 1..numberMax. Distinct matters: two holes
- * wanting the same number would make one of them unreachable and the other ambiguous.
+ * The first level of a track is its tokens in their natural order — the shapes as authored, the
+ * hues in palette order, the numerals and letters ascending — so the circle hole is the first
+ * hole, and A is on the left. That is the same promise the video series makes, and it is what
+ * lets a new player answer by position before they can answer by shape. Later levels shuffle it.
  *
  * Shuffled once per attempt, not per round. Per-round would be re-teaching the board every
  * few seconds instead of testing recognition.
  */
 export const makeArrangement = (level: Level): Token[] => {
-  const slots = HOLES_PER_BOARD;
-
-  const tokens: Token[] =
-    level.mode === "shape"
-      ? SHAPES.map((_, i) => ({ kind: "shape", shape: i }))
-      : level.mode === "color"
-        ? // Four of the seven hues, in palette order so the board is not also scrambled
-          // before shuffleHoles has had its say.
-          drawDistinct(HUES.length, slots).map((i) => ({
-            kind: "color",
-            color: i - 1,
-          }))
-        : drawDistinct(level.numberMax ?? 5, slots).map((value) => ({
-            kind: "number",
-            value,
-          }));
+  const tokens = boardTokens(level, HOLES_PER_BOARD);
 
   if (!level.shuffleHoles) return tokens;
 
@@ -70,8 +92,8 @@ export const makeArrangement = (level: Level): Token[] => {
 /**
  * `count` distinct values from 1..max, by partial shuffle, returned in ascending order.
  *
- * Distinct matters for both the colour and the number levels: two holes wanting the same thing
- * would make one of them unreachable and the other ambiguous.
+ * Distinct matters for the colour, number and letter levels alike: two holes wanting the same
+ * thing would make one of them unreachable and the other ambiguous.
  */
 const drawDistinct = (max: number, count: number): number[] => {
   const pool = Array.from({ length: max }, (_, i) => i + 1);
@@ -86,7 +108,8 @@ const drawDistinct = (max: number, count: number): number[] => {
  * A running order over the tokens ON THE BOARD, with none twice in a row.
  *
  * Drawn from the arrangement rather than from the whole token space, which is what stops a
- * number level asking for a numeral that is not on the board.
+ * number level asking for a numeral — or a letter level asking for a letter — that is not on
+ * the board.
  *
  * Of the tokens with the most draws left, excluding whatever came last, pick one at random.
  * "Most left" is what makes this correct rather than merely likely: always taking from the
@@ -116,7 +139,7 @@ export const makeRounds = (level: Level, arrangement: Token[]): Round[] => {
       .map((count, index) => ({ index, count }))
       .filter((o) => o.count > 0 && o.index !== previous);
 
-    // Unreachable for any level in LEVELS, but throwing would be a worse outcome than one
+    // Unreachable for any level in any track, but throwing would be a worse outcome than one
     // repeat.
     const pool =
       eligible.length > 0
