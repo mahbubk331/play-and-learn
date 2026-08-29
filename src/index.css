@@ -209,6 +209,121 @@ body {
   box-shadow: 0 6px 0 rgba(42, 36, 56, 0.16);
 }
 
+/*
+ * The second of two buttons on the end-of-track card. Smaller and unfilled, so "Pick a game"
+ * is unmistakably the offer and "Play again" is unmistakably available — a matched pair would
+ * make the child choose between two equally loud things, which at this age means tapping
+ * whichever is nearer their thumb.
+ */
+.replay-second {
+  padding: 18px 44px;
+  font-size: 36px;
+  background: transparent;
+}
+
+/*
+ * THE PICKER
+ *
+ * Absolutely positioned in the same logical units as everything else on the stage, so it scales
+ * with the same transform and needs no layout rules of its own beyond these.
+ */
+.menu {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 320ms ease-out;
+}
+
+.menu-head {
+  position: absolute;
+  left: 63px;
+  right: 63px;
+  top: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/*
+ * A card is a <button>, not a div with a handler. That is what gets keyboard focus, Enter and
+ * Space, and a name in the accessibility tree for free — and the adult setting the game up is
+ * the one who may be using any of those.
+ */
+.menu-card {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 24px;
+  padding: 22px 26px;
+  text-align: left;
+  background: #fff8ec;
+  border: 7px solid #2a2438;
+  border-radius: 30px;
+  box-shadow: 0 12px 0 rgba(42, 36, 56, 0.16);
+  cursor: pointer;
+  /* The tap comes from a hand with poor aim, and a 420x232 target that scrolls or
+     text-selects under a dragged finger is a target that failed. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.menu-card:active {
+  transform: translateY(6px);
+  box-shadow: 0 6px 0 rgba(42, 36, 56, 0.16);
+}
+
+/*
+ * The icon keeps its 120px, always.
+ *
+ * A flex item shrinks by default, and an SVG shrinks by scaling its whole viewBox — so on the
+ * two cards whose blurb wraps to a second line the icon was quietly drawn smaller and the title
+ * next to it started 40px further left than on the other two. Four cards that nearly line up
+ * look worse than four that never tried to.
+ */
+.menu-card > svg {
+  flex: none;
+}
+
+.menu-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Without this the flex item refuses to shrink and a long blurb pushes the card wider than
+     the two columns allow. */
+  min-width: 0;
+}
+
+/*
+ * Back to the picker, from the HUD.
+ *
+ * Both of these are load-bearing rather than tidying. The HUD sets `pointer-events: none` so a
+ * finger crossing it mid-drag is never swallowed, which this has to opt back out of; and
+ * `.grab` is a full-stage sibling that would otherwise sit on top of this and take the tap.
+ */
+.hud-menu {
+  pointer-events: auto;
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  background: #ffd34e;
+  border: 6px solid #2a2438;
+  border-radius: 20px;
+  box-shadow: 0 6px 0 rgba(42, 36, 56, 0.16);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hud-menu:active {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 rgba(42, 36, 56, 0.16);
+}
+
 
 /*
  * The critter arrives from off-screen right, applauds, and leaves. The wrapper carries the

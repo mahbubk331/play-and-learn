@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AudioEngine } from "./audio";
+import { AudioEngine, pickPraise, type SoundName } from "./audio";
 import { Board, HoleShape } from "./components/Board";
 import {
   GameDoneCard,
@@ -10,6 +10,7 @@ import {
   WrongMark,
 } from "./components/Feedback";
 import { Hud } from "./components/Hud";
+import { Menu } from "./components/Menu";
 import { Critter } from "./components/Critter";
 import { pickSpecies, type Species } from "./critters/registry";
 import {
@@ -21,7 +22,8 @@ import {
   type Phase,
   type Round,
 } from "./game";
-import { LEVELS, MAX_STARS, MAX_WRONG, starsFor } from "./levels";
+import { MAX_WRONG, starsFor, type Mode } from "./levels";
+import { maxStars, TRACKS, trackById } from "./tracks";
 import {
   BLOCK_HOME,
   HOLE_Y,
@@ -38,7 +40,6 @@ import {
   type Token,
 } from "./tokens";
 import {
-  clearProgress,
   dismissSplash,
   hapticCorrect,
   hapticDrop,
@@ -46,6 +47,7 @@ import {
   loadProgress,
   prepareDevice,
   saveProgress,
+  type Progress,
 } from "./native";
 import { colors } from "./theme";
 
@@ -81,24 +83,24 @@ const Block = ({
         never has to know about it. */}
     <g transform={`rotate(${rotation} ${STAGE.width / 2} ${STAGE.height / 2})`}>
       {/*
-        The block IS the token: a polygon for a shape, the digits themselves for a number.
-        Drawn by the same component as the hole at scale 1, so a block and the hole it belongs
-        in can never be different shapes.
+        The block IS the token: a polygon for a shape, the digits themselves for a number,
+        the letter itself for a letter. Drawn by the same component as the hole at scale 1, so
+        a block and the hole it belongs in can never be different shapes.
       */}
       <HoleShape
         token={token}
         cx={STAGE.width / 2}
         cy={STAGE.height / 2}
         scale={1}
-        // One orange for every shape and number block; a colour block is its own colour. The
-        // single orange is load-bearing on the shape levels — colour-coding the shapes would
-        // let a child solve them by matching colour and never look at an outline.
+        // One orange for every shape, number and letter block; a colour block is its own
+        // colour. The single orange is load-bearing on the shape levels — colour-coding the
+        // shapes would let a child solve them by matching colour and never look at an outline.
         fill={tokenHue(token)?.fill ?? colors.block}
         stroke={colors.ink}
         strokeWidth={8}
       />
 
-      {/* Gloss on anything solid. Skipped for numerals, which are mostly outline — a highlight
+      {/* Gloss on anything solid. Skipped for glyphs, which are mostly outline — a highlight
           sitting on a stroke reads as a smudge rather than a shine. */}
       {tokenGlyph(token) ? null : (
         <ellipse
@@ -113,14 +115,45 @@ const Block = ({
   </svg>
 );
 
+/**
+ * Which screen is up.
+ *
+ * Two, and there is no router: "menu" is the picker, "playing" is a track. Everything about a
+ * track — which levels, which tokens, what is spoken — comes from the selected Track, so this
+ * is genuinely the whole navigation model.
+ */
+type Screen = "menu" | "playing";
+
 export const App = () => {
   const stageRef = useRef<HTMLDivElement>(null);
   const audio = useRef<AudioEngine>(new AudioEngine());
 
   const [scale, setScale] = useState(1);
 
+  const [screen, setScreen] = useState<Screen>("menu");
+
+  /**
+   * Which of the four games is being played, and how far into it.
+   *
+   * `trackId` is also the mode of every level in it and the key its progress is stored under
+   * (see tracks.ts), so there is exactly one identifier for "which game is this" rather than
+   * three that have to agree.
+   */
+  const [trackId, setTrackId] = useState<Mode>(TRACKS[0].id);
+  const track = trackById(trackId);
+  const levels = track.levels;
+
   const [levelIndex, setLevelIndex] = useState(0);
-  const level = LEVELS[levelIndex];
+  const level = levels[levelIndex];
+
+  /**
+   * Saved progress for every track, held whole.
+   *
+   * The picker needs all four at once and a level completion writes one of them, so the map is
+   * the unit of state as well as the unit of storage. Keeping four independent pieces of state
+   * would mean the picker reading from somewhere other than where the game writes.
+   */
+  const [progress, setProgress] = useState<Progress>({});
 
   /*
    * The board and its running order are ONE piece of state, deliberately.
@@ -128,22 +161,24 @@ export const App = () => {
    * They were two, and the initial value called makeArrangement twice — once for the
    * arrangement, once inside the rounds initialiser — so the rounds were drawn from a
    * different board than the one on screen. With shapes that was invisible, because every
-   * shape level produces the same four shapes in the same order. The moment level 1 became a
-   * COLOUR level, which draws four of seven at random, it showed up immediately as a green
-   * ball and no green hole: an unwinnable round.
+   * shape level produces the same four shapes in the same order. The moment the first level
+   * became a COLOUR level, which draws four of seven at random, it showed up immediately as a
+   * green ball and no green hole: an unwinnable round.
    *
    * Holding them together makes it impossible to set one without the other, which is a
    * stronger guarantee than remembering to derive them in the right order.
    */
   const [board, setBoard] = useState<{ arrangement: Token[]; rounds: Round[] }>(
     () => {
-      const arrangement = makeArrangement(LEVELS[0]);
-      return { arrangement, rounds: makeRounds(LEVELS[0], arrangement) };
+      const first = TRACKS[0].levels[0];
+      const arrangement = makeArrangement(first);
+      return { arrangement, rounds: makeRounds(first, arrangement) };
     },
   );
   const { arrangement, rounds } = board;
   const [roundIndex, setRoundIndex] = useState(0);
   const [wrong, setWrong] = useState(0);
+  /** Stars banked in the CURRENT track. The other three tracks' totals live in `progress`. */
   const [stars, setStars] = useState(0);
   const [phase, setPhase] = useState<Phase>("playing");
 
@@ -158,14 +193,28 @@ export const App = () => {
 
   const dragOffset = useRef<Point>({ x: 0, y: 0 });
 
+  /**
+   * The last thing said on a correct answer, so the next one is different.
+   *
+   * A ref rather than state: nothing renders from it, and making it state would re-render the
+   * whole stage on every correct drop to change a value only the audio engine reads.
+   */
+  const lastPraise = useRef<SoundName | null>(null);
+
   const round = rounds[roundIndex];
 
   /**
-   * Boot: lock the device, decode the audio, resume saved progress, then drop the splash.
+   * Boot: lock the device, decode the audio, load saved progress, then drop the splash.
+   *
+   * It no longer resumes into a level. It cannot: there are four tracks and no way to know
+   * which one the child wants today, and guessing "the one they played last" would drop a child
+   * who wanted letters into numbers with no explanation. So the picker opens instead, and each
+   * card carries its own resume point — the progress is still used, it is just presented as a
+   * choice rather than acted on.
    *
    * The splash is hidden LAST and explicitly, rather than on a timer, because it is the only
-   * thing covering the gap between "React mounted" and "the first block is on screen with its
-   * sound ready". A timer either flashes it away early or holds it after the game is playable.
+   * thing covering the gap between "React mounted" and "the picker is on screen with its audio
+   * ready". A timer either flashes it away early or holds it after the app is usable.
    */
   useEffect(() => {
     let cancelled = false;
@@ -175,10 +224,7 @@ export const App = () => {
       await audio.current.load();
 
       const saved = await loadProgress();
-      if (!cancelled && saved && saved.levelIndex < LEVELS.length) {
-        setStars(saved.stars);
-        startLevel(saved.levelIndex);
-      }
+      if (!cancelled) setProgress(saved);
 
       if (!cancelled) await dismissSplash();
     })();
@@ -186,7 +232,6 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -213,18 +258,21 @@ export const App = () => {
   }, []);
 
   /**
-   * Say the shape's name whenever a new block is presented.
+   * Say the token's name whenever a new block is presented.
    *
    * Keyed on the round and the phase being playable, so it fires on a fresh round but
    * NOT when the block springs back after a wrong drop — repeating the name on every
    * retry turns the cue into nagging, and the child already knows what they are
    * holding.
+   *
+   * Guarded on the screen too, or leaving a track mid-round would announce a letter to an empty
+   * picker.
    */
   useEffect(() => {
-    if (phase !== "playing" || !round) return;
+    if (screen !== "playing" || phase !== "playing" || !round) return;
     audio.current.play(tokenClip(round.token));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundIndex, levelIndex, rounds]);
+  }, [roundIndex, levelIndex, rounds, screen]);
 
   const toLogical = useCallback((clientX: number, clientY: number): Point => {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -239,11 +287,11 @@ export const App = () => {
     /*
      * A grab during the wrong-answer beat is allowed, and cuts it short.
      *
-     * The beat is 1.6s so the T-rex can finish, and a block that ignores a two-year-old
-     * for a second and a half does not read as "wait", it reads as broken — they will
-     * grab at it, get nothing, and grab harder. Letting the drag start cancels the
-     * dinosaur and returns control immediately. Nothing is lost: the X and the roar have
-     * already delivered the message by the time a child has reached for the block again.
+     * The beat is 900ms, and a block that ignores a two-year-old for the best part of a second
+     * does not read as "wait", it reads as broken — they will grab at it, get nothing, and grab
+     * harder. Letting the drag start returns control immediately. Nothing is lost: the X and
+     * the knock have already delivered the message by the time a child has reached for the
+     * block again.
      */
     if (phase !== "playing" && phase !== "wrong") return;
     if (phase === "wrong") setPhase("playing");
@@ -290,7 +338,8 @@ export const App = () => {
     // A tick for the block meeting the board, whichever hole it was.
     hapticDrop();
 
-    // The board is shuffled from level 2, so a hole's position is not its token.
+    // The board is shuffled from the second level of every track, so a hole's position is not
+    // its token.
     if (round && sameToken(arrangement[position], round.token)) {
       setPos({ x: holeCenterX(position), y: HOLE_Y });
       setSeatedPos(position);
@@ -299,8 +348,23 @@ export const App = () => {
       setSpecies((previous: Species | null) => pickSpecies(previous?.id ?? null));
       setPhase("correct");
       hapticCorrect();
+
+      /*
+       * Applause on the instant, then a different word of praise every time.
+       *
+       * The applause is what fires immediately — it is the impact, and it wants to land on the
+       * same frame as the block seating. The praise is held back 220ms so it lands in the tail
+       * of the clap rather than underneath it: applause is broadband noise and it makes a
+       * simultaneous "Good job!" almost unintelligible, which was true of the recorded
+       * "Hooray!" too and simply mattered less when the words never changed.
+       *
+       * Well inside CORRECT_HOLD (1.7s): the longest line here is about 900ms at rate 1.0, so
+       * it has finished before the next block arrives.
+       */
+      const praise = pickPraise(lastPraise.current);
+      lastPraise.current = praise;
       audio.current.play("clap");
-      audio.current.play("cheer");
+      audio.current.play(praise, 0.22);
       return;
     }
 
@@ -330,9 +394,17 @@ export const App = () => {
     setPhase("wrong");
   };
 
-  const startLevel = useCallback((index: number) => {
-    const next = LEVELS[index];
+  /**
+   * Start one level of one track, and reset everything a level owns.
+   *
+   * Takes the track explicitly rather than reading `trackId` from state, because the picker
+   * calls it in the same tick as the track changes and reading state there would build the
+   * board from the OUTGOING track — four colour holes under a letter block.
+   */
+  const startLevel = useCallback((id: Mode, index: number) => {
+    const next = trackById(id).levels[index];
     const arrangement = makeArrangement(next);
+    setTrackId(id);
     setLevelIndex(index);
     setBoard({ arrangement, rounds: makeRounds(next, arrangement) });
     setRoundIndex(0);
@@ -342,6 +414,40 @@ export const App = () => {
     setPos(BLOCK_HOME);
     setPhase("playing");
   }, []);
+
+  /** A card was tapped on the picker: resume that track where it was left. */
+  const pickTrack = (id: Mode) => {
+    // The picker tap is usually the session's first gesture, so it is what unlocks audio.
+    audio.current.unlock();
+
+    const saved = progress[id];
+    const chosen = trackById(id);
+    /*
+     * Clamped, because a stored index only has to be a valid index — it does not have to be
+     * valid for THIS build. Removing a level from a track without bumping LEVELS_VERSION would
+     * otherwise land here as an undefined level and a blank board.
+     */
+    const index = Math.min(saved?.levelIndex ?? 0, chosen.levels.length - 1);
+
+    setStars(saved?.stars ?? 0);
+    startLevel(id, Math.max(0, index));
+    setScreen("playing");
+  };
+
+  /**
+   * Back to the picker, from the HUD button or from finishing a track.
+   *
+   * Phase is reset on the way out. Leaving it as "correct" would leave a feedback timer to fire
+   * against a screen that is no longer up, and the sparkles and the X would still be mounted
+   * over the first frame of the next track.
+   */
+  const goMenu = () => {
+    audio.current.unlock();
+    setPhase("playing");
+    setSeatedPos(null);
+    setWrongPos(null);
+    setScreen("menu");
+  };
 
   // Feedback beats hold, then the game moves on. Cleanup matters: tapping a card
   // during a beat would otherwise be overwritten by the old timer.
@@ -365,7 +471,7 @@ export const App = () => {
 
       if (phase === "restarting") {
         // Same level, fresh rounds and a fresh board. Stars already banked stay.
-        startLevel(levelIndex);
+        startLevel(trackId, levelIndex);
         return;
       }
 
@@ -374,15 +480,23 @@ export const App = () => {
       if (roundIndex + 1 >= rounds.length) {
         const earned = stars + starsFor(wrong);
         setStars(earned);
-        // Save the level AFTER this one: reopening should offer what comes next, not replay
-        // what was just finished.
-        void saveProgress({
-          levelIndex: Math.min(levelIndex + 1, LEVELS.length - 1),
-          stars: earned,
-        });
+        /*
+         * Save the level AFTER this one: reopening should offer what comes next, not replay
+         * what was just finished. Written into this track's slot only — the other three are
+         * carried through untouched, which is the entire point of keying progress by track.
+         */
+        const next: Progress = {
+          ...progress,
+          [trackId]: {
+            levelIndex: Math.min(levelIndex + 1, levels.length - 1),
+            stars: earned,
+          },
+        };
+        setProgress(next);
+        void saveProgress(next);
         setPhase("levelDone");
         audio.current.play(
-          levelIndex + 1 >= LEVELS.length ? "cheer" : "nextlevel",
+          levelIndex + 1 >= levels.length ? "cheer" : "nextlevel",
           0.35,
         );
         return;
@@ -394,22 +508,44 @@ export const App = () => {
     }, hold);
 
     return () => window.clearTimeout(timer);
-  }, [phase, roundIndex, rounds.length, levelIndex, wrong, stars, startLevel]);
+  }, [
+    phase,
+    roundIndex,
+    rounds.length,
+    levelIndex,
+    levels.length,
+    trackId,
+    progress,
+    wrong,
+    stars,
+    startLevel,
+  ]);
 
   const advance = () => {
     audio.current.unlock();
-    if (levelIndex + 1 >= LEVELS.length) {
+    if (levelIndex + 1 >= levels.length) {
       setPhase("gameDone");
       return;
     }
-    startLevel(levelIndex + 1);
+    startLevel(trackId, levelIndex + 1);
   };
 
-  const restartGame = () => {
+  /**
+   * Replay the finished track from level 1.
+   *
+   * Zeroes THIS track and saves the map, rather than calling clearProgress — a child replaying
+   * colours should not lose the number stars they earned yesterday.
+   */
+  const replayTrack = () => {
     audio.current.unlock();
-    void clearProgress();
+    const next: Progress = {
+      ...progress,
+      [trackId]: { levelIndex: 0, stars: 0 },
+    };
+    setProgress(next);
+    void saveProgress(next);
     setStars(0);
-    startLevel(0);
+    startLevel(trackId, 0);
   };
 
   const stageStyle = useMemo(
@@ -421,87 +557,108 @@ export const App = () => {
     [scale],
   );
 
-  const interactive = phase === "playing" || phase === "wrong";
+  const interactive =
+    screen === "playing" && (phase === "playing" || phase === "wrong");
 
   return (
     <div className="viewport">
       <div ref={stageRef} className="stage" style={stageStyle}>
-        <Hud
-          level={level.n}
-          totalLevels={LEVELS.length}
-          stars={stars}
-          wrong={wrong}
-          round={roundIndex + (phase === "correct" ? 1 : 0)}
-          rounds={rounds.length}
-          nonce={okNonce}
-        />
-
-        <Board
-          hoverIndex={hoverPos}
-          seatedIndex={seatedPos}
-          arrangement={arrangement}
-        />
-
-        {/*
-          The dragged block is taken off screen during the correct-answer beat. The
-          block you then see in the hole is the one Board draws *behind* the board face,
-          which is what makes it look like it went in rather than like it is sitting on
-          top of the opening.
-        */}
-        {interactive && round ? (
-          <div
-            className="grab"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-          >
-            {/*
-              Keyed by level and round so each new block is a fresh element. Without the
-              key the block would animate from the hole it just dropped into back up to
-              the start position, which reads as the machine spitting it out again.
-            */}
-            <Block
-              key={`${levelIndex}-${roundIndex}`}
-              token={round.token}
-              rotation={round.rotation}
-              at={pos}
-              held={dragging}
-              dragging={dragging}
-            />
-          </div>
-        ) : null}
-
-        {phase === "correct" && seatedPos !== null ? (
+        {screen === "menu" ? (
+          <Menu progress={progress} onPick={pickTrack} />
+        ) : (
           <>
-            <Sparkles x={holeCenterX(seatedPos)} y={HOLE_Y} nonce={okNonce} />
-            {species ? <Critter species={species} nonce={okNonce} /> : null}
+            <Hud
+              title={track.title}
+              level={level.n}
+              totalLevels={levels.length}
+              stars={stars}
+              wrong={wrong}
+              round={roundIndex + (phase === "correct" ? 1 : 0)}
+              rounds={rounds.length}
+              nonce={okNonce}
+              onMenu={goMenu}
+            />
+
+            <Board
+              hoverIndex={hoverPos}
+              seatedIndex={seatedPos}
+              arrangement={arrangement}
+            />
+
+            {/*
+              The dragged block is taken off screen during the correct-answer beat. The
+              block you then see in the hole is the one Board draws *behind* the board face,
+              which is what makes it look like it went in rather than like it is sitting on
+              top of the opening.
+            */}
+            {interactive && round ? (
+              <div
+                className="grab"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+              >
+                {/*
+                  Keyed by track, level and round so each new block is a fresh element.
+                  Without the key the block would animate from the hole it just dropped into
+                  back up to the start position, which reads as the machine spitting it out
+                  again.
+                */}
+                <Block
+                  key={`${trackId}-${levelIndex}-${roundIndex}`}
+                  token={round.token}
+                  rotation={round.rotation}
+                  at={pos}
+                  held={dragging}
+                  dragging={dragging}
+                />
+              </div>
+            ) : null}
+
+            {phase === "correct" && seatedPos !== null ? (
+              <>
+                <Sparkles
+                  x={holeCenterX(seatedPos)}
+                  y={HOLE_Y}
+                  nonce={okNonce}
+                />
+                {species ? <Critter species={species} nonce={okNonce} /> : null}
+              </>
+            ) : null}
+
+            {(phase === "wrong" || phase === "restarting") &&
+            wrongPos !== null ? (
+              <WrongMark
+                x={holeCenterX(wrongPos)}
+                y={HOLE_Y}
+                nonce={wrongNonce}
+              />
+            ) : null}
+
+            {phase === "restarting" ? <RestartCard /> : null}
+
+            {phase === "levelDone" ? (
+              <LevelDoneCard
+                level={level.n}
+                stars={starsFor(wrong)}
+                wrong={wrong}
+                isLast={levelIndex + 1 >= levels.length}
+                onNext={advance}
+              />
+            ) : null}
+
+            {phase === "gameDone" ? (
+              <GameDoneCard
+                title={track.title}
+                stars={stars}
+                maxStars={maxStars(track)}
+                onReplay={replayTrack}
+                onMenu={goMenu}
+              />
+            ) : null}
           </>
-        ) : null}
-
-        {(phase === "wrong" || phase === "restarting") && wrongPos !== null ? (
-          <WrongMark x={holeCenterX(wrongPos)} y={HOLE_Y} nonce={wrongNonce} />
-        ) : null}
-
-        {phase === "restarting" ? <RestartCard /> : null}
-
-        {phase === "levelDone" ? (
-          <LevelDoneCard
-            level={level.n}
-            stars={starsFor(wrong)}
-            wrong={wrong}
-            isLast={levelIndex + 1 >= LEVELS.length}
-            onNext={advance}
-          />
-        ) : null}
-
-        {phase === "gameDone" ? (
-          <GameDoneCard
-            stars={stars}
-            maxStars={MAX_STARS}
-            onReplay={restartGame}
-          />
-        ) : null}
+        )}
       </div>
     </div>
   );

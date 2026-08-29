@@ -212,15 +212,30 @@ export const LevelDoneCard = ({
   </div>
 );
 
-/** Shown after the last level. Total stars out of the maximum, and a full restart. */
+/**
+ * Shown after the last level OF A TRACK. Its stars out of its maximum, and two ways onward.
+ *
+ * Two buttons rather than one, and "Pick a game" is the primary of the two. Finishing a track is
+ * the natural moment to try a different one — a child who has just finished colours is exactly
+ * who the shapes track is for — and before the split there was nowhere else to go, so the only
+ * offer was to replay. Replaying is still there, second, because a four-year-old who liked it
+ * will want it immediately and should not have to go through the picker to get it.
+ *
+ * The stars are this track's, and so is the maximum. A total across all four here would tell
+ * someone who just scored 9/9 on colours that they had got 9/48, which reads as a failure.
+ */
 export const GameDoneCard = ({
+  title,
   stars,
   maxStars,
   onReplay,
+  onMenu,
 }: {
+  title: string;
   stars: number;
   maxStars: number;
   onReplay: () => void;
+  onMenu: () => void;
 }) => (
   <div className="overlay">
     <div
@@ -239,6 +254,17 @@ export const GameDoneCard = ({
 
     <div
       style={{
+        fontFamily: fonts.sans,
+        fontWeight: 600,
+        fontSize: 34,
+        color: colors.text,
+      }}
+    >
+      {title} — every level
+    </div>
+
+    <div
+      style={{
         display: "flex",
         alignItems: "center",
         gap: 12,
@@ -252,8 +278,13 @@ export const GameDoneCard = ({
       {stars} / {maxStars}
     </div>
 
-    <button type="button" className="replay" onClick={onReplay}>
-      Play again
-    </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+      <button type="button" className="replay" onClick={onMenu}>
+        Pick a game
+      </button>
+      <button type="button" className="replay replay-second" onClick={onReplay}>
+        Play again
+      </button>
+    </div>
   </div>
 );

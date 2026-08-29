@@ -1,4 +1,5 @@
 import { HUES } from "./hues";
+import { ALPHABET } from "./letters";
 import { MAX_NUMBER } from "./levels";
 
 /**
@@ -68,9 +69,106 @@ for (const h of HUES) {
   COLORS[`c${h.id}`] = `${BASE}audio/game-c${h.id}.wav`;
 }
 
-const FILES: Record<string, string> = { ...NAMED, ...NUMBERS, ...COLORS };
+/**
+ * The twenty-six letter names, built from the alphabet for the same reason as the numerals and
+ * the colours: a clip cannot end up silently missing because a filename was typed wrong.
+ *
+ * These are recorded, like everything else. An earlier cut of the letter track had no clips and
+ * fell back to `window.speechSynthesis`, which was rejected for the reason it deserved to be —
+ * it sounded like a screen reader. Voice *selection* could only choose from whatever a device
+ * happened to have installed, so on a machine without the neural voices it was David or Zira and
+ * no amount of rate and pitch tuning helped.
+ *
+ * ON PRONUNCIATION, which is the interesting part of generating these: the bare character is the
+ * right input for almost every letter. The voice says the letter NAME, and says it in its own
+ * locale, so this British voice gives "zed" and "aitch" without either being hard-coded. Two
+ * letters need spelling out because the bare character is also a common English word — and that
+ * was measured, not guessed, by cross-correlating the two renderings of each letter:
+ *
+ *   - "A" is read as the indefinite article by the US voices. Needs "ay".
+ *   - "I" is not read as "eye" by the GB voices. Needs "eye".
+ *
+ * Each is only wrong on one side of the Atlantic, so one table is right for any voice. 24 of the
+ * 26 were confirmed by an independent spelling producing byte-identical audio ("G" == "gee",
+ * "N" == "enn", "U" == "ewe", and so on); E and W matched no spelling tried, but W is 0.75s — the
+ * longest of the twenty-six, which is what "double-you" requires — and E is 0.33s, one long
+ * vowel. See scripts/gen-voice.mjs.
+ */
+const LETTERS: Record<string, string> = {};
+for (const ch of ALPHABET) {
+  LETTERS[`l${ch}`] = `${BASE}audio/game-l${ch}.wav`;
+}
 
-export type SoundName = keyof typeof NAMED | `n${number}` | `c${string}`;
+/**
+ * The lines a correct answer can be praised with.
+ *
+ * Variety is the whole point. One fixed response — which is what the recorded "Hooray!" was on
+ * its own — stops being information after the third time you hear it, and the reward beat is the
+ * one thing in this game most worth keeping alive. Eight lines plus the cheer means a child has
+ * to get nine right before anything can repeat, and `pickPraise` never repeats back-to-back even
+ * then.
+ *
+ * Short, and exclamations rather than sentences. The beat is CORRECT_HOLD (1.7s), shared with the
+ * applause and an animal running on and clapping; the longest of these is 0.86s, so nothing is
+ * still talking when the next block arrives.
+ *
+ * THE ID IS THE FILENAME, which is why these are ids rather than array positions. Praise used to
+ * be keyed by index, so reordering this list would have silently repointed every clip.
+ */
+const PRAISE_LINES = [
+  "goodjob",
+  "greatwork",
+  "keepitup",
+  "welldone",
+  "niceone",
+  "yougotit",
+  "brilliant",
+  "thatsit",
+] as const;
+
+const PRAISE_FILES: Record<string, string> = {};
+for (const id of PRAISE_LINES) {
+  PRAISE_FILES[`p${id}`] = `${BASE}audio/game-p${id}.wav`;
+}
+
+const FILES: Record<string, string> = {
+  ...NAMED,
+  ...NUMBERS,
+  ...COLORS,
+  ...LETTERS,
+  ...PRAISE_FILES,
+};
+
+export type SoundName =
+  | keyof typeof NAMED
+  | `n${number}`
+  | `c${string}`
+  | `l${string}`
+  | `p${string}`;
+
+/**
+ * What a correct answer can play, recorded and spoken together.
+ *
+ * The recorded "Hooray!" stays IN the rotation rather than being replaced by it. It is the only
+ * one of these in the child's voice used everywhere else in the app, so it is the best of them —
+ * it just should not be the only one.
+ */
+export const PRAISE: SoundName[] = [
+  "cheer",
+  ...PRAISE_LINES.map((id): SoundName => `p${id}`),
+];
+
+/**
+ * A praise line, never the same one twice running.
+ *
+ * Same shape as `pickSpecies` in critters/registry.tsx, and for the same reason: back-to-back
+ * repeats are what make a random reward read as a canned one, and they are exactly what an
+ * unfiltered random pick produces one time in nine.
+ */
+export const pickPraise = (previous: SoundName | null): SoundName => {
+  const pool = PRAISE.filter((p) => p !== previous);
+  return pool[Math.floor(Math.random() * pool.length)];
+};
 
 /**
  * Per-sound gain, with 1.0 for anything not listed — which is every spoken cue.
