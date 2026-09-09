@@ -1,5 +1,5 @@
 /**
- * Generates the spoken letter and praise clips in public/audio.
+ * Generates the spoken letter and praise clips in audio-src.
  *
  *   node scripts/gen-voice.mjs            # write the clips
  *   node scripts/gen-voice.mjs --check    # verify pronunciation, write nothing
@@ -21,7 +21,7 @@
  * rejected), the only ffmpeg likely to be on a dev machine is Playwright's own video-only build
  * with no mp3 decoder, and Chromium decodes mp3 natively via decodeAudioData. It also resamples
  * to the context rate on the way through, which is how the output lands at 48kHz to match every
- * clip already in public/audio.
+ * clip already in audio-src.
  *
  * TRIMMING IS NOT OPTIONAL. The endpoint pads short clips with silence — up to 1.25s of it,
  * which on a one-syllable letter is most of the file. In a video that padding is load-bearing;
@@ -36,7 +36,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT = join(root, "public", "audio");
+const OUT = join(root, "audio-src");
 const CHECK_ONLY = process.argv.includes("--check");
 
 /**
@@ -124,7 +124,7 @@ const synth = async (text, attempt = 1) => {
   }
 };
 
-/** 16-bit mono WAV, matching the clips already in public/audio. */
+/** 16-bit mono WAV, matching the clips already in audio-src. */
 const wav = (samples, rate) => {
   const buf = Buffer.alloc(44 + samples.length * 2);
   buf.write("RIFF", 0, "ascii");
@@ -171,7 +171,7 @@ const decodeTrim = async (bytes) =>
     for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
 
     // 48000, not the mp3's native 24000: decodeAudioData resamples to the context rate, and
-    // every clip already in public/audio is mono 48kHz 16-bit.
+    // every clip already in audio-src is mono 48kHz 16-bit.
     const ctx = new OfflineAudioContext(1, 1, 48000);
     const buf = await ctx.decodeAudioData(arr.buffer);
     const d = buf.getChannelData(0);

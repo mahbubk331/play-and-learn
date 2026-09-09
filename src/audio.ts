@@ -36,17 +36,17 @@ const BASE = import.meta.env.BASE_URL;
  * voice — TypeScript will not let the key be missing.
  */
 const NAMED = {
-  clap: `${BASE}audio/sfx-clap.wav`,
-  cheer: `${BASE}audio/kids-cheer.wav`,
-  wrong: `${BASE}audio/sfx-wrong.wav`,
-  bonk: `${BASE}audio/sfx-bonk.wav`,
-  roar: `${BASE}audio/sfx-roar.wav`,
-  circle: `${BASE}audio/game-circle.wav`,
-  square: `${BASE}audio/game-square.wav`,
-  triangle: `${BASE}audio/game-triangle.wav`,
-  star: `${BASE}audio/game-star.wav`,
-  tryagain: `${BASE}audio/game-tryagain.wav`,
-  nextlevel: `${BASE}audio/game-nextlevel.wav`,
+  clap: `${BASE}audio/sfx-clap.m4a`,
+  cheer: `${BASE}audio/kids-cheer.m4a`,
+  wrong: `${BASE}audio/sfx-wrong.m4a`,
+  bonk: `${BASE}audio/sfx-bonk.m4a`,
+  roar: `${BASE}audio/sfx-roar.m4a`,
+  circle: `${BASE}audio/game-circle.m4a`,
+  square: `${BASE}audio/game-square.m4a`,
+  triangle: `${BASE}audio/game-triangle.m4a`,
+  star: `${BASE}audio/game-star.m4a`,
+  tryagain: `${BASE}audio/game-tryagain.m4a`,
+  nextlevel: `${BASE}audio/game-nextlevel.m4a`,
 } as const;
 
 /**
@@ -57,7 +57,7 @@ const NAMED = {
  */
 const NUMBERS: Record<string, string> = {};
 for (let n = 1; n <= MAX_NUMBER; n++) {
-  NUMBERS[`n${n}`] = `${BASE}audio/game-n${n}.wav`;
+  NUMBERS[`n${n}`] = `${BASE}audio/game-n${n}.m4a`;
 }
 
 /**
@@ -66,7 +66,7 @@ for (let n = 1; n <= MAX_NUMBER; n++) {
  */
 const COLORS: Record<string, string> = {};
 for (const h of HUES) {
-  COLORS[`c${h.id}`] = `${BASE}audio/game-c${h.id}.wav`;
+  COLORS[`c${h.id}`] = `${BASE}audio/game-c${h.id}.m4a`;
 }
 
 /**
@@ -96,7 +96,7 @@ for (const h of HUES) {
  */
 const LETTERS: Record<string, string> = {};
 for (const ch of ALPHABET) {
-  LETTERS[`l${ch}`] = `${BASE}audio/game-l${ch}.wav`;
+  LETTERS[`l${ch}`] = `${BASE}audio/game-l${ch}.m4a`;
 }
 
 /**
@@ -128,7 +128,7 @@ const PRAISE_LINES = [
 
 const PRAISE_FILES: Record<string, string> = {};
 for (const id of PRAISE_LINES) {
-  PRAISE_FILES[`p${id}`] = `${BASE}audio/game-p${id}.wav`;
+  PRAISE_FILES[`p${id}`] = `${BASE}audio/game-p${id}.m4a`;
 }
 
 const FILES: Record<string, string> = {
