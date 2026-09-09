@@ -8,12 +8,14 @@
   "scripts": {
     "dev": "vite",
     "sync": "bun run scripts/sync-shapes.mjs",
-    "prebuild": "bun run scripts/sync-shapes.mjs --check",
+    "prebuild": "bun run scripts/sync-shapes.mjs --check && node scripts/encode-audio.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "ios": "bun run build && cap sync ios",
     "assets": "echo \"Render resources/icon.png + splash.png: see README > App Store\"",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "encode-audio": "node scripts/encode-audio.mjs",
+    "predev": "node scripts/encode-audio.mjs"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.0",

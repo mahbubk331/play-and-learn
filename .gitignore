@@ -8,3 +8,9 @@ ios/App/App/public
 ios/App/build
 ios/App/Pods
 ios/DerivedData
+
+# Firebase Hosting deploy cache
+.firebase
+
+# Generated from the WAV masters in audio-src/ by scripts/encode-audio.mjs.
+public/audio
