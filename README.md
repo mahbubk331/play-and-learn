@@ -59,6 +59,42 @@ bun run voice kids                   # the shared "Hooray!"
 python scripts/export-game-audio.py  # trim + copy into this project
 ```
 
+## Deploying
+
+Firebase Hosting, project `mkhan-play-and-learn`. Two workflows in
+[.github/workflows](.github/workflows):
+
+| Trigger | Channel |
+|---|---|
+| push to `main`, or **Run workflow** on the Actions tab | `live` |
+| any pull request **from this repo** | a preview channel, expiring in 7d |
+
+Forked PRs are skipped rather than run, by the `if:` on the preview job: the trigger is
+`pull_request` and not `pull_request_target`, so a fork never gets the deploy credential, and a
+job that cannot deploy should not spend nine minutes discovering it.
+
+### The one-time setup, which is easy to forget
+
+**Both workflows need a repository secret**, `FIREBASE_SERVICE_ACCOUNT_MKHAN_PLAY_AND_LEARN`,
+holding a service-account JSON key for the project. There is no fallback and no default — without
+it nothing can deploy.
+
+```bash
+firebase init hosting:github    # creates the service account AND uploads the secret
+```
+
+Answer **no** when it offers to overwrite the two workflow files; the ones here are already set up
+(and commented). Or do it by hand: Firebase console → Project settings → Service accounts →
+Generate new private key, then paste the whole JSON into Settings → Secrets and variables →
+Actions.
+
+**This was missed once, and it cost an afternoon.** The workflows were committed on a branch and
+only reached `main` later, so their first ever run was also their first failure — and the deploy
+action's error for a missing credential mentions neither the secret nor the workflow. Both
+workflows now **check the credential as their very first step** and fail with a message naming it,
+ahead of installing ffmpeg, bun and running a production build. If a run gets past that step and
+still fails, the credential exists and the problem is something else.
+
 ## The four games
 
 The home screen is a picker: four game cards plus the animal game ([Menu.tsx](src/components/Menu.tsx)).
