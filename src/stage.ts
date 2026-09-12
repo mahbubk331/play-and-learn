@@ -101,6 +101,20 @@ type LayoutSpec = {
     stripHeight: number;
     stripCount: number;
   };
+  memory: {
+    /** The rectangle the card grid is fitted into and centred in. */
+    area: { left: number; top: number; width: number; height: number };
+    gap: number;
+    /**
+     * Columns for each supported CARD count — 6, 8 and 12. See PAIR_STEPS in memory.ts.
+     *
+     * A table rather than a formula, because the right answer is not `ceil(sqrt(n))` on either
+     * stage: it is whatever divides the count exactly AND runs with the long side of the
+     * rectangle. Twelve cards want 4x3 on the wide stage and 3x4 on the tall one, and a
+     * formula that gets both right is longer than the table.
+     */
+    cols: Record<number, number>;
+  };
   hud: {
     starSize: number;
     /**
@@ -128,8 +142,13 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
       cols: 2,
       titleSize: 68,
       scoreSize: 40,
-      stripHeight: 96,
-      stripCount: 4,
+      stripHeight: 64,
+      stripCount: 3,
+    },
+    memory: {
+      area: { left: 60, top: 132, width: 880, height: 542 },
+      gap: 22,
+      cols: { 6: 3, 8: 4, 12: 4 },
     },
     hud: { starSize: 30, stack: false },
   },
@@ -157,8 +176,13 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
       cols: 1,
       titleSize: 46,
       scoreSize: 32,
-      stripHeight: 72,
+      stripHeight: 52,
       stripCount: 2,
+    },
+    memory: {
+      area: { left: 50, top: 210, width: 540, height: 856 },
+      gap: 20,
+      cols: { 6: 2, 8: 2, 12: 3 },
     },
     hud: { starSize: 26, stack: true },
   },
@@ -203,13 +227,63 @@ export const MENU = {
   scoreSize: 0,
   stripHeight: 0,
   stripCount: 0,
-  /** Bottom banner, spanning the whole card grid. See the animal card note in Menu.tsx. */
+  /** The bottom row, spanning the whole card grid. See the note in Menu.tsx. */
   wideWidth: 0,
   wideTop: 0,
+  /**
+   * One of the two cards that share the bottom row: the park and the memory board.
+   *
+   * They share a row rather than taking one each, and that is a space constraint as much as a
+   * design one. A second full-width banner runs the landscape picker to 860 units inside a
+   * 720-tall stage. Side by side they cost the row that was already there.
+   */
+  extraWidth: 0,
 };
 
 /** Top-bar geometry. See the note on `stack`. */
 export const HUD = { starSize: 0, stack: false };
+
+const MEMORY_AREA = { left: 0, top: 0, width: 0, height: 0 };
+let memoryGap = 0;
+let memoryCols: Record<number, number> = {};
+
+/**
+ * Where one memory card goes, and how big it is.
+ *
+ * Cards FILL their cell rather than holding a fixed aspect ratio, and the artwork inside is
+ * scaled to fit whatever shape that is. The alternative — a fixed card shape, centred — leaves
+ * the grid smaller than the space on three of the six count-and-orientation combinations, and a
+ * six-card board on a phone ends up with cards a third the size of the room available to them.
+ *
+ * The grid is centred in the area, so a board with fewer cards sits in the middle of the screen
+ * rather than hugging the top-left corner it was laid out from.
+ */
+export const memoryGrid = (
+  cards: number,
+): {
+  cols: number;
+  rows: number;
+  cardWidth: number;
+  cardHeight: number;
+  at: (index: number) => { left: number; top: number };
+} => {
+  const cols = memoryCols[cards] ?? Math.ceil(Math.sqrt(cards));
+  const rows = Math.ceil(cards / cols);
+
+  const cardWidth = (MEMORY_AREA.width - memoryGap * (cols - 1)) / cols;
+  const cardHeight = (MEMORY_AREA.height - memoryGap * (rows - 1)) / rows;
+
+  return {
+    cols,
+    rows,
+    cardWidth,
+    cardHeight,
+    at: (index: number) => ({
+      left: MEMORY_AREA.left + (index % cols) * (cardWidth + memoryGap),
+      top: MEMORY_AREA.top + Math.floor(index / cols) * (cardHeight + memoryGap),
+    }),
+  };
+};
 
 let cols = 1;
 let rowPitch = 0;
@@ -248,9 +322,17 @@ export const applyLayout = (next: Orientation): void => {
       spec.menu.card.top +
       (spec.menu.card.height + spec.menu.card.gap) *
         Math.ceil(4 / spec.menu.cols),
+    extraWidth:
+      (spec.menu.card.width * spec.menu.cols +
+        spec.menu.card.gap * (spec.menu.cols - 1) -
+        spec.menu.card.gap) /
+      2,
   });
 
   Object.assign(HUD, spec.hud);
+  Object.assign(MEMORY_AREA, spec.memory.area);
+  memoryGap = spec.memory.gap;
+  memoryCols = spec.memory.cols;
 
   cols = spec.cols;
   rowPitch = spec.rowPitch;

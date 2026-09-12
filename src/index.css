@@ -294,16 +294,22 @@ body {
 }
 
 /*
- * The animal park's card: full width, across the bottom.
+ * The bottom row's two cards: the park and the memory board.
  *
- * Shaped differently from the four game cards ON PURPOSE. It is not a game - no levels, no
- * score, nothing to finish - and a fifth identical card would promise that it behaves like the
- * others. A banner reads as "and also this", which is what it is. It also avoids an empty sixth
- * cell in a 2x3 grid, which looks like something failed to load.
+ * Shaped differently from the four game cards ON PURPOSE. Neither is a game with levels - no
+ * score, nothing to finish - and a card identical to the tracks would promise that it behaves
+ * like them. Centred, with the icon over the title, so the row reads as "and also these".
+ *
+ * Two of them side by side also fills what would otherwise be an empty sixth cell in a 2x3
+ * grid, which looks like something failed to load.
  */
-.menu-card-wide {
-  gap: 30px;
-  padding: 14px 34px;
+.menu-card-extra {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 18px;
+  text-align: center;
 }
 
 /*
@@ -732,5 +738,127 @@ body {
   80%,
   100% {
     transform: translateX(0) rotate(0deg);
+  }
+}
+
+/*
+ * THE MEMORY GAME
+ *
+ * Pairs of animals, face down. Positioned in the same logical units as everything else on the
+ * stage, so the grid scales with the one transform and needs no rules of its own beyond these.
+ */
+.memory {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 320ms ease-out;
+}
+
+.memory-head {
+  position: absolute;
+  left: 33px;
+  right: 33px;
+  top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.memory-card {
+  position: absolute;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* A toddler aiming at a card will drag across it rather than tap cleanly. None of that may
+     scroll, select or rubber-band. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /*
+   * The flip is a real rotation in depth rather than a width animation, so `perspective` has to
+   * be on the PARENT of the rotating element — set on the rotating element itself it applies to
+   * that element's children instead, and the card turns flat and lifelessly.
+   */
+  perspective: 900px;
+}
+
+.memory-card:disabled {
+  cursor: default;
+}
+
+.memory-inner {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  transition: transform 360ms cubic-bezier(0.25, 0.85, 0.35, 1);
+}
+
+.memory-card-up .memory-inner {
+  transform: rotateY(180deg);
+}
+
+/*
+ * Both faces occupy the whole card and one of them is always turned away. `backface-visibility`
+ * is what makes that work, and the -webkit- prefix is not optional: iOS Safari needs it, and
+ * without it both faces render at once and the card looks like a smear mid-flip.
+ */
+.memory-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border: 6px solid #2a2438;
+  border-radius: 22px;
+  box-shadow: 0 8px 0 rgba(42, 36, 56, 0.16);
+  overflow: hidden;
+}
+
+.memory-back {
+  background: #ffd34e;
+}
+
+/* Pre-rotated, so it is the face showing once the card has turned. */
+.memory-front {
+  background: #fff8ec;
+  transform: rotateY(180deg);
+}
+
+.memory-name {
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #2a2438;
+  opacity: 0.6;
+}
+
+/*
+ * A found pair settles: it stops casting a shadow and sits back a little, so the cards still in
+ * play are the ones that look liftable. Deliberately NOT faded out — a two-year-old reads a
+ * greyed-out card as broken, and the animals they have already found are half the fun of the
+ * finished board.
+ */
+.memory-card-done .memory-face {
+  box-shadow: none;
+}
+
+.memory-card-done .memory-inner {
+  transform: rotateY(180deg) scale(0.94);
+}
+
+/*
+ * The flip is the affordance, not decoration — with it removed the card would change contents
+ * with no indication it had turned over. So reduced motion keeps the change instant rather than
+ * removing it, which is what this query asks for.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .memory-inner {
+    transition: none;
   }
 }

@@ -10,6 +10,7 @@ import {
   WrongMark,
 } from "./components/Feedback";
 import { Hud } from "./components/Hud";
+import { Memory } from "./components/Memory";
 import { Menu } from "./components/Menu";
 import { Animals } from "./components/Animals";
 import { Critter } from "./components/Critter";
@@ -122,15 +123,18 @@ const Block = ({
 /**
  * Which screen is up.
  *
- * Three, and there is no router: "menu" is the picker, "playing" is one of the four level
- * tracks, and "animals" is the park.
+ * Four, and there is no router: "menu" is the picker, "playing" is one of the four level
+ * tracks, "animals" is the park and "memory" is the matching-pairs board.
+
+ * The park and the memory board are their own screens rather than a fifth and sixth track
+ * because neither is a level ladder over the token model — see animals.ts and memory.ts.
  *
  * The park is its own screen rather than a fifth track because it is not a game — no levels, no
  * rounds, no score, no wrong answer (see animals.ts). Everything about a TRACK comes from the
  * selected Track, so for the four games this really is the whole navigation model; the park just
  * needs somewhere to be.
  */
-type Screen = "menu" | "playing" | "animals";
+type Screen = "menu" | "playing" | "animals" | "memory";
 
 export const App = () => {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -470,6 +474,17 @@ export const App = () => {
   };
 
   /**
+   * Open the memory board.
+   *
+   * Nothing to resume and nothing to set up, exactly like the park: it holds no progress, so
+   * this is the tap that unlocks audio and a screen change.
+   */
+  const openMemory = () => {
+    audio.current.unlock();
+    setScreen("memory");
+  };
+
+  /**
    * Back to the picker, from the HUD button, the park, or finishing a track.
    *
    * Phase is reset on the way out. Leaving it as "correct" would leave a feedback timer to fire
@@ -603,6 +618,7 @@ export const App = () => {
             progress={progress}
             onPick={pickTrack}
             onAnimals={openAnimals}
+            onMemory={openMemory}
           />
         ) : screen === "animals" ? (
           <Animals
@@ -610,7 +626,12 @@ export const App = () => {
             onSound={(clip) => audio.current.playAlone(clip as SoundName)}
             clipLength={(clip) => audio.current.duration(clip as SoundName)}
           />
-
+        ) : screen === "memory" ? (
+          <Memory
+            onMenu={goMenu}
+            onSound={(clip) => audio.current.playAlone(clip as SoundName)}
+            clipLength={(clip) => audio.current.duration(clip as SoundName)}
+          />
         ) : (
           <>
             <Hud

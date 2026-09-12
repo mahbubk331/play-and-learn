@@ -215,15 +215,142 @@ const AnimalStrip = ({ height = MENU.stripHeight }: { height?: number }) => {
   );
 };
 
+/**
+ * A two-card icon for the memory game, in the same flat-ink style as the track icons.
+ *
+ * One card face down and one turned over, overlapping, because that is the entire mechanic and
+ * a single card says nothing about it.
+ */
+const MemoryIcon = ({ height }: { height: number }) => (
+  <svg
+    height={height}
+    viewBox="0 0 132 100"
+    style={{ display: "block", flex: "none" }}
+    aria-hidden="true"
+  >
+    <g transform="rotate(-9 40 54)">
+      <rect
+        x="6"
+        y="14"
+        width="58"
+        height="78"
+        rx="12"
+        fill={colors.spark}
+        stroke={colors.ink}
+        strokeWidth={7}
+      />
+      <polygon
+        points="35,32 41,50 60,50 45,61 51,79 35,68 19,79 25,61 10,50 29,50"
+        fill={colors.bg}
+        stroke={colors.ink}
+        strokeWidth={5}
+        strokeLinejoin="round"
+      />
+    </g>
+
+    <g transform="rotate(8 94 54)">
+      <rect
+        x="66"
+        y="10"
+        width="58"
+        height="78"
+        rx="12"
+        fill={colors.textOnDark}
+        stroke={colors.ink}
+        strokeWidth={7}
+      />
+      <circle cx="95" cy="42" r="15" fill={colors.block} stroke={colors.ink} strokeWidth={5} />
+      <rect
+        x="80"
+        y="60"
+        width="30"
+        height="16"
+        rx="8"
+        fill={colors.block}
+        stroke={colors.ink}
+        strokeWidth={5}
+      />
+    </g>
+  </svg>
+);
+
+/**
+ * One of the two cards on the bottom row: the park, and the memory board.
+ *
+ * NEITHER IS A TRACK, and the card says so by being shaped differently from the four above —
+ * icon over title rather than beside it, centred rather than left-aligned, and no star count
+ * because there is nothing to score. A fifth and sixth card identical to the tracks would
+ * promise that they behave like them: levels, stars, somewhere to get to.
+ *
+ * Stacked rather than side-by-side internally, because this card is half the width of the row
+ * and at 230 units — which is what it comes to in portrait — a title beside an icon leaves too
+ * little for either.
+ */
+const ExtraCard = ({
+  icon,
+  title,
+  blurb,
+  left,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  blurb: string;
+  left: number;
+  onPress: () => void;
+}) => (
+  <button
+    type="button"
+    className="menu-card menu-card-extra"
+    style={{
+      left,
+      top: MENU.wideTop,
+      width: MENU.extraWidth,
+      height: MENU.card.height,
+    }}
+    onClick={onPress}
+  >
+    {icon}
+
+    <div
+      style={{
+        fontFamily: fonts.display,
+        fontWeight: 800,
+        fontSize: 34,
+        lineHeight: 1,
+        color: colors.ink,
+      }}
+    >
+      {title}
+    </div>
+
+    <div
+      style={{
+        fontFamily: fonts.sans,
+        fontWeight: 600,
+        fontSize: 19,
+        lineHeight: 1.1,
+        color: colors.text,
+        opacity: 0.6,
+      }}
+    >
+      {blurb}
+    </div>
+  </button>
+);
+
 export const Menu = ({
   progress,
   onPick,
   /** The animal game is not a track, so it gets its own way in. See animals.ts. */
   onAnimals,
+  /** Nor is the memory board. See memory.ts. */
+  onMemory,
 }: {
   progress: Progress;
   onPick: (id: Mode) => void;
   onAnimals: () => void;
+  onMemory: () => void;
 }) => {
   const banked = TRACKS.reduce(
     (sum, t) => sum + (progress[t.id]?.stars ?? 0),
@@ -318,62 +445,23 @@ export const Menu = ({
       ))}
 
       {/*
-        The animal game. Last, full width, and shaped unlike the four above it — see the note on
-        .menu-card-wide. No star count, because there is nothing to score: the status line says
-        what it is instead.
+        The bottom row: the two things that are not tracks. See ExtraCard.
       */}
-      <button
-        type="button"
-        className="menu-card menu-card-wide"
-        style={{
-          left: MENU.card.left,
-          top: MENU.wideTop,
-          width: MENU.wideWidth,
-          height: MENU.card.height,
-        }}
-        onClick={onAnimals}
-      >
-        <AnimalStrip />
+      <ExtraCard
+        left={MENU.card.left}
+        icon={<AnimalStrip />}
+        title="Animals"
+        blurb={`${ANIMALS.length} animals to meet`}
+        onPress={onAnimals}
+      />
 
-        <div className="menu-card-text">
-          <div
-            style={{
-              fontFamily: fonts.display,
-              fontWeight: 800,
-              fontSize: 38,
-              lineHeight: 1,
-              color: colors.ink,
-            }}
-          >
-            Animals
-          </div>
-
-          <div
-            style={{
-              fontFamily: fonts.sans,
-              fontWeight: 500,
-              fontSize: 20,
-              lineHeight: 1.15,
-              color: colors.text,
-              opacity: 0.75,
-            }}
-          >
-            Touch an animal to hear it
-          </div>
-
-          <div
-            style={{
-              fontFamily: fonts.sans,
-              fontWeight: 600,
-              fontSize: 21,
-              color: colors.text,
-              opacity: 0.5,
-            }}
-          >
-            {ANIMALS.length} animals &middot; just for fun
-          </div>
-        </div>
-      </button>
+      <ExtraCard
+        left={MENU.card.left + MENU.extraWidth + MENU.card.gap}
+        icon={<MemoryIcon height={MENU.stripHeight} />}
+        title="Memory"
+        blurb="Find the pairs"
+        onPress={onMemory}
+      />
 
     </div>
   );
