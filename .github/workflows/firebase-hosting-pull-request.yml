@@ -16,6 +16,31 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
+      # FIRST, ahead of ffmpeg, bun and a production build, all of which are wasted work if the
+      # credential is not there.
+      #
+      # The deploy action's own error for a missing service account never mentions the secret,
+      # the workflow, or what to do about it. The first time these workflows ran, working out
+      # that the credential had simply never been created meant reading the run history and
+      # diffing the live bundle against the repo. This says it in one line instead.
+      #
+      # Passed through `env` rather than interpolated into the script: the value is a multi-line
+      # JSON key, and `[ -z "${{ secrets.X }}" ]` would paste it into the shell source, where the
+      # first quote or newline in it breaks the script.
+      - name: Check the deploy credential exists
+        env:
+          FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MKHAN_PLAY_AND_LEARN }}
+        run: |
+          if [ -z "$FIREBASE_CREDENTIAL" ]; then
+            echo "::error title=Deploy credential missing::Repository secret FIREBASE_SERVICE_ACCOUNT_MKHAN_PLAY_AND_LEARN is unset or empty, so there is no credential to deploy with."
+            echo "Set it either way:"
+            echo "  1. firebase init hosting:github   - creates the service account AND uploads the secret"
+            echo "  2. Firebase console > Project settings > Service accounts > Generate new private key,"
+            echo "     then paste the whole JSON into Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "Deploy credential present: $(printf '%s' "$FIREBASE_CREDENTIAL" | wc -c) bytes."
+
       - uses: actions/checkout@v4
 
       # The build encodes audio-src/*.wav to AAC (scripts/encode-audio.mjs). Not assuming
