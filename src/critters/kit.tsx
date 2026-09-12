@@ -141,6 +141,71 @@ export const Body = ({ p, tail }: { p: Palette; tail?: ReactNode }) => (
 );
 
 /**
+ * A stubby leg pair.
+ *
+ * Lived in distinct.tsx until the animal game needed it too. Anything two species files both
+ * draw belongs here, which is the whole point of this module.
+ */
+export const Legs = ({
+  p,
+  y = 150,
+  spread = 24,
+  rx = 14,
+  ry = 16,
+}: {
+  p: Palette;
+  y?: number;
+  spread?: number;
+  rx?: number;
+  ry?: number;
+}) => (
+  <>
+    {[-1, 1].map((s) => (
+      <ellipse
+        key={s}
+        cx={MID + s * spread}
+        cy={y}
+        rx={rx}
+        ry={ry}
+        fill={p.skinDeep}
+        {...line}
+      />
+    ))}
+  </>
+);
+
+/** Two-stroke tail: ink underneath, skin on top. Reads as a limb, not a line. */
+export const Tail = ({
+  d,
+  p,
+  w = 15,
+  tip,
+}: {
+  d: string;
+  p: Palette;
+  w?: number;
+  tip?: ReactNode;
+}) => (
+  <>
+    <path
+      d={d}
+      fill="none"
+      stroke={INK}
+      strokeWidth={w + 8}
+      strokeLinecap="round"
+    />
+    <path
+      d={d}
+      fill="none"
+      stroke={p.skinDeep}
+      strokeWidth={w}
+      strokeLinecap="round"
+    />
+    {tip}
+  </>
+);
+
+/**
  * The mouth: a dark interior with a jaw that drops over it.
  *
  * Drawn AFTER the head rather than before, which is what lets the interior sit inside the

@@ -4,9 +4,11 @@ import {
   Arms,
   Face,
   INK,
+  Legs,
   MID,
   Mouth,
   type Palette,
+  Tail,
   Tooth,
   TOOTH,
   line,
@@ -35,58 +37,6 @@ export type Parts = {
   Head: () => ReactElement;
   Body: () => ReactElement;
 };
-
-/** A stubby leg pair. */
-const Legs = ({
-  p,
-  y = 150,
-  spread = 24,
-  rx = 14,
-  ry = 16,
-}: {
-  p: Palette;
-  y?: number;
-  spread?: number;
-  rx?: number;
-  ry?: number;
-}) => (
-  <>
-    {[-1, 1].map((s) => (
-      <ellipse
-        key={s}
-        cx={MID + s * spread}
-        cy={y}
-        rx={rx}
-        ry={ry}
-        fill={p.skinDeep}
-        {...line}
-      />
-    ))}
-  </>
-);
-
-/** Two-stroke tail: ink underneath, skin on top. Reads as a limb, not a line. */
-const Tail = ({
-  d,
-  p,
-  w = 15,
-  tip,
-}: {
-  d: string;
-  p: Palette;
-  w?: number;
-  tip?: ReactElement;
-}) => (
-  <>
-    <path d={d} fill="none" stroke={INK} strokeWidth={w + 6} strokeLinecap="round" />
-    <path d={d} fill="none" stroke={p.skin} strokeWidth={w} strokeLinecap="round" />
-    {tip}
-  </>
-);
-
-// ======================================================================================
-// COW — the widest head and the biggest muzzle of the five.
-// ======================================================================================
 
 const COW: Palette = { skin: "#FBF6EE", skinDeep: "#DFD5C6", belly: "#FFFFFF" };
 const COW_SPOT = "#3A3347";

@@ -287,10 +287,57 @@ body {
 .menu-card-text {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   /* Without this the flex item refuses to shrink and a long blurb pushes the card wider than
      the two columns allow. */
   min-width: 0;
+}
+
+/*
+ * The bottom row's two cards: the park and the memory board.
+ *
+ * Shaped differently from the four game cards ON PURPOSE. Neither is a game with levels - no
+ * score, nothing to finish - and a card identical to the tracks would promise that it behaves
+ * like them. Centred, with the icon over the title, so the row reads as "and also these".
+ *
+ * Two of them side by side also fills what would otherwise be an empty sixth cell in a 2x3
+ * grid, which looks like something failed to load.
+ */
+.menu-card-extra {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 18px;
+  text-align: center;
+}
+
+/*
+ * A category heading over one of the bottom-row cards. Currently only "Fun game for kids".
+ *
+ * Sized and placed entirely from the layout - it spans exactly the card beneath it and fills
+ * the `extraGap` band above the row. See where it is rendered in Menu.tsx for why it is scoped
+ * to one card rather than to the whole row.
+ *
+ * BOTTOM-ALIGNED inside its band, so the heading sits against the card it labels rather than
+ * floating between that card and the track grid above. `flex-end` rather than a margin because
+ * the text wraps to two lines on the portrait stage, where the card is 147 units wide - and a
+ * margin would push a two-line heading up into the track cards.
+ */
+.menu-category {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  color: #2a2438;
+  opacity: 0.62;
+  /* The card below owns every tap in this corner of the picker; the label must never eat one. */
+  pointer-events: none;
 }
 
 /*
@@ -322,6 +369,234 @@ body {
 .hud-menu:active {
   transform: translateY(3px);
   box-shadow: 0 3px 0 rgba(42, 36, 56, 0.16);
+}
+
+/*
+ * THE ANIMAL PARK
+ *
+ * Free play: twelve animals, touch one and it makes its noise and moves. No scoring, so none
+ * of the HUD applies and this screen owns its whole layout.
+ */
+.zoo {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 320ms ease-out;
+}
+
+.zoo-head {
+  position: absolute;
+  left: 33px;
+  top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/*
+ * Layer 1: the crossing, and the hit area.
+ *
+ * NO BOX. This was a bordered card per animal, which read as a form to fill in — and the border
+ * was doing no work, because the animal inside it is already the thing you look at and aim for.
+ * What survives of the box is its GEOMETRY: a transparent, generously rectangular target, because
+ * irregular artwork is a poor thing to aim at with a two-year-old's hands.
+ *
+ * The button IS the drifting element, deliberately. Anything else — a static button wrapping a
+ * moving animal, or a moving animal inside a fixed hit area — means the thing you can tap and the
+ * thing you can see are in different places.
+ *
+ * `--travel` is set per animal in Animals.tsx, which is what lets one keyframe set serve both
+ * directions and every size.
+ */
+.zoo-roam-x {
+  position: absolute;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* A toddler will drag across this screen rather than tapping cleanly. None of that may
+     scroll, select or rubber-band. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  animation-name: zoo-roam-x;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/*
+ * Layer 2: the vertical sweep, on a DIFFERENT period from the horizontal one.
+ *
+ * That difference is the whole mechanism. Two oscillations whose periods do not divide each other
+ * drift in and out of phase, so the path traced is a slowly-precessing loop that wanders over the
+ * whole field instead of retracing one line. It is a Lissajous figure, and it costs no JavaScript:
+ * no rAF loop, no position state, nothing running between taps.
+ *
+ * `alternate` on both, so each sweep reverses rather than snapping back to its start.
+ */
+.zoo-roam-y {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  animation-name: zoo-roam-y;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/*
+ * `--span-x` and `--span-y` are set per animal in Animals.tsx, computed from the field size and
+ * the animal's own size so the sweep can never carry it off the stage. One keyframe pair serves
+ * every animal at every size.
+ */
+@keyframes zoo-roam-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--span-x));
+  }
+}
+
+@keyframes zoo-roam-y {
+  from {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  to {
+    transform: translateY(var(--span-y)) rotate(1.5deg);
+  }
+}
+
+/*
+ * Layer 3: the pop. A SEPARATE element again, for the same reason — three animations on one
+ * element would leave only the last one working.
+ */
+.zoo-art {
+  /* Grows from the feet, so a hop leaves the ground rather than shrinking about the middle. */
+  transform-origin: 50% 100%;
+  /* A flat offset shadow, matching the blocks and the reward critters. Without it a floating
+     animal reads as pasted onto the background rather than hovering over it. */
+  filter: drop-shadow(0 9px 0 rgba(42, 36, 56, 0.13));
+}
+
+.zoo-art > svg {
+  display: block;
+}
+
+.zoo-name {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #2a2438;
+  opacity: 0.6;
+}
+
+/*
+ * Ambient motion is the kind of thing that makes some people ill, and unlike the tap reaction it
+ * never stops. The reaction stays — it is feedback for something the user just did, which is the
+ * exception this media query is meant to allow.
+ */
+/*
+ * The wander never stops, and endless motion is the kind of thing that makes some people ill. The
+ * POP and the SHAKE stay — those are feedback for something the user just did, which is the
+ * exception this query is meant to allow.
+ *
+ * Stopping the roam leaves the animals parked wherever their rest box put them, which is still a
+ * perfectly playable screen: the question is asked, four animals are visible, one is right.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .zoo-roam-x,
+  .zoo-roam-y {
+    animation: none;
+  }
+}
+
+/*
+ * The wrong animal, when touched: a quick shudder and nothing else.
+ *
+ * Deliberately NOT the pop. The animal stays, nothing is scored, and the shake is only there so
+ * the child can see WHICH one they touched — 'not that one' teaches more than a general 'no', the
+ * same reason the wrong-answer X in the games lands on the hole that was chosen.
+ */
+.zoo-shake {
+  animation: zoo-shake 520ms ease-in-out;
+}
+
+@keyframes zoo-shake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  15% { transform: translateX(-9px) rotate(-4deg); }
+  35% { transform: translateX(8px) rotate(4deg); }
+  55% { transform: translateX(-6px) rotate(-3deg); }
+  75% { transform: translateX(4px) rotate(2deg); }
+}
+
+/* The spoken question, echoed on screen for the adult. Pops when the question changes. */
+.zoo-ask {
+  animation: zoo-ask 420ms cubic-bezier(0.22, 1.4, 0.4, 1);
+}
+
+@keyframes zoo-ask {
+  0% { opacity: 0; transform: translateY(-8px) scale(0.94); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/*
+ * THE POP. Squash, swell, gone.
+ *
+ * `forwards`, unlike every other reaction animation in this app, because the animal must STAY
+ * invisible for the ~40ms between the pop finishing and React swapping the slot. Without it the
+ * artwork snaps back to full opacity for a frame or two, which reads as a flicker.
+ *
+ * The tiny squash at 12% is what sells it: a balloon compresses before it bursts, and without the
+ * anticipation the swell looks like a scale transition rather than a pop.
+ */
+.zoo-pop {
+  animation: zoo-pop 420ms cubic-bezier(0.3, 1.5, 0.5, 1) forwards;
+}
+
+@keyframes zoo-pop {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  12% {
+    transform: scale(0.88, 1.06);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(1.45) rotate(4deg);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7) rotate(6deg);
+    opacity: 0;
+  }
+}
+
+/*
+ * The burst that goes with it, reusing the `spark-out` keyframes the correct-answer sparkles
+ * already use — same look, no second implementation. Positioned at the animal's middle and
+ * travelling outward by a fraction of its size, so a big animal bursts bigger.
+ */
+.zoo-burst {
+  position: absolute;
+  left: 50%;
+  pointer-events: none;
+}
+
+.zoo-burst span {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  margin-top: -10px;
+  border-radius: 5px;
+  background: #ffd34e;
+  border: 3px solid #2a2438;
+  box-sizing: border-box;
+  animation: spark-out 460ms ease-out forwards;
 }
 
 
@@ -384,7 +659,7 @@ body {
  * Shallower and pulsier than the roar version: this is laughing along with the clapping,
  * not a single held bellow.
  */
-.critter-jaw {
+.critter .critter-jaw {
   animation: critter-jaw 1500ms ease-out forwards;
   transform-box: view-box;
   /* Inherit so the dev gallery can freeze every part of the animation from one place. */
@@ -424,8 +699,8 @@ body {
  * The clap. Both arms swing toward the head's centre line and meet, three times, on the
  * same beats as the bounce and the laugh. Mirrored values, one keyframe set each.
  */
-.critter-arm-l,
-.critter-arm-r {
+.critter .critter-arm-l,
+.critter .critter-arm-r {
   animation-duration: 1500ms;
   animation-timing-function: ease-in-out;
   animation-fill-mode: forwards;
@@ -434,11 +709,11 @@ body {
   animation-play-state: inherit;
 }
 
-.critter-arm-l {
+.critter .critter-arm-l {
   animation-name: critter-clap-l;
 }
 
-.critter-arm-r {
+.critter .critter-arm-r {
   animation-name: critter-clap-r;
 }
 
@@ -491,5 +766,393 @@ body {
   80%,
   100% {
     transform: translateX(0) rotate(0deg);
+  }
+}
+
+/*
+ * THE MEMORY GAME
+ *
+ * Pairs of animals, face down. Positioned in the same logical units as everything else on the
+ * stage, so the grid scales with the one transform and needs no rules of its own beyond these.
+ */
+.memory {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 320ms ease-out;
+}
+
+.memory-head {
+  position: absolute;
+  left: 33px;
+  right: 33px;
+  top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.memory-card {
+  position: absolute;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* A toddler aiming at a card will drag across it rather than tap cleanly. None of that may
+     scroll, select or rubber-band. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /*
+   * The flip is a real rotation in depth rather than a width animation, so `perspective` has to
+   * be on the PARENT of the rotating element — set on the rotating element itself it applies to
+   * that element's children instead, and the card turns flat and lifelessly.
+   */
+  perspective: 900px;
+}
+
+.memory-card:disabled {
+  cursor: default;
+}
+
+.memory-inner {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  transition: transform 360ms cubic-bezier(0.25, 0.85, 0.35, 1);
+}
+
+.memory-card-up .memory-inner {
+  transform: rotateY(180deg);
+}
+
+/*
+ * Both faces occupy the whole card and one of them is always turned away. `backface-visibility`
+ * is what makes that work, and the -webkit- prefix is not optional: iOS Safari needs it, and
+ * without it both faces render at once and the card looks like a smear mid-flip.
+ */
+.memory-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border: 6px solid #2a2438;
+  border-radius: 22px;
+  box-shadow: 0 8px 0 rgba(42, 36, 56, 0.16);
+  overflow: hidden;
+}
+
+.memory-back {
+  background: #ffd34e;
+}
+
+/* Pre-rotated, so it is the face showing once the card has turned. */
+.memory-front {
+  background: #fff8ec;
+  transform: rotateY(180deg);
+}
+
+.memory-name {
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #2a2438;
+  opacity: 0.6;
+}
+
+/*
+ * A found pair settles: it stops casting a shadow and sits back a little, so the cards still in
+ * play are the ones that look liftable. Deliberately NOT faded out — a two-year-old reads a
+ * greyed-out card as broken, and the animals they have already found are half the fun of the
+ * finished board.
+ */
+.memory-card-done .memory-face {
+  box-shadow: none;
+}
+
+.memory-card-done .memory-inner {
+  transform: rotateY(180deg) scale(0.94);
+}
+
+/*
+ * The flip is the affordance, not decoration — with it removed the card would change contents
+ * with no indication it had turned over. So reduced motion keeps the change instant rather than
+ * removing it, which is what this query asks for.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .memory-inner {
+    transition: none;
+  }
+}
+
+/*
+ * THE BOXES GAME
+ *
+ * Dots and Boxes. Positioned in the same logical units as everything else on the stage, so the
+ * board scales with the one transform.
+ *
+ * The board is an SVG that takes no pointer events at all, with an invisible button over every
+ * line the player can draw. The note at the top of components/Boxes.tsx explains why the look
+ * and the touch are separate layers; these rules are the half of it that lives in CSS.
+ */
+.boxes {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 320ms ease-out;
+}
+
+.boxes-head {
+  position: absolute;
+  left: 33px;
+  right: 33px;
+  top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.boxes-title {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 44px;
+  color: #2a2438;
+}
+
+/*
+ * Whose turn it is. Outlined in that player's colour rather than filled with it, because it sits
+ * next to two score cards outlined the same way and a third filled block would read as a third
+ * player.
+ */
+.boxes-turn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /*
+   * 26px rather than the 30 the score cards use, and the padding to match. This banner is the
+   * only thing in the head that sits over where the board begins on the landscape stage, so
+   * every unit of its height is a unit of clearance above the top row of dots. See the note on
+   * the landscape `boxes.area`.
+   */
+  padding: 8px 20px;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  white-space: nowrap;
+  color: #2a2438;
+  background: #fff8ec;
+  border: 6px solid #2a2438;
+  border-radius: 999px;
+}
+
+/*
+ * The board. `pointer-events: none` is the load-bearing line in this whole file: without it the
+ * SVG sits over the buttons and the game cannot be played at all.
+ */
+.boxes-art {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+/* A claimed box fades its colour in. No scale pop: scaling an SVG group needs `transform-box`
+   to behave, and a box that grows out of the corner of the board on the browsers where it does
+   not is worse than a box that simply appears. */
+.boxes-claim {
+  animation: fade-in 260ms ease-out;
+}
+
+/*
+ * The line just drawn, in the one yellow this app uses for "look here".
+ *
+ * A static glow rather than an animation, and that is a constraint rather than a preference: the
+ * lines are keyed by edge id and never remount, so adding an animating class to one would not
+ * restart anything. It earns its keep most when the computer moves — it is the only thing that
+ * says WHICH of the forty lines just appeared.
+ */
+.boxes-line-new {
+  filter: drop-shadow(0 0 7px rgba(255, 211, 78, 0.95));
+}
+
+/*
+ * One tap target per undrawn line. Invisible, and deliberately so — the line under it in the SVG
+ * is the thing being pointed at, and a visible target on every one of sixty would bury the board.
+ *
+ * The focus ring is the exception and is not decoration: this screen is playable with a keyboard
+ * (see the file header), and without a ring a player tabbing through has no way to know which
+ * line Enter is about to draw.
+ */
+.boxes-edge {
+  position: absolute;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.boxes-edge:disabled {
+  cursor: default;
+}
+
+.boxes-edge:focus-visible {
+  outline: 4px solid #ffd34e;
+  outline-offset: 0;
+}
+
+.boxes-score {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 22px;
+  background: #fff8ec;
+  /* The colour comes from the player, inline. Everything else about the two cards is identical. */
+  border: 6px solid #2a2438;
+  border-radius: 26px;
+}
+
+/*
+ * The card of whoever is to move lifts. It is the same information as the turn banner, put where
+ * the player is already looking — at the score — and it is the only cue that survives a player
+ * who has stopped reading the banner three moves ago.
+ */
+.boxes-score-on {
+  box-shadow: 0 10px 0 rgba(42, 36, 56, 0.16);
+  transform: translateY(-4px);
+}
+
+/*
+ * THE SETUP SCREEN
+ *
+ * The only screen in this app written to be read by the person playing. See the note on `phase`
+ * in components/Boxes.tsx.
+ */
+.boxes-setup {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  top: 130px;
+  bottom: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.boxes-rules {
+  margin: 0 0 10px;
+  padding: 0 0 0 32px;
+  font-family: Fredoka, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.45;
+  color: #2a2438;
+  opacity: 0.8;
+}
+
+.boxes-group-title {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  color: #2a2438;
+  opacity: 0.65;
+}
+
+.boxes-row {
+  display: flex;
+  align-self: stretch;
+  gap: 12px;
+}
+
+/*
+ * One choice. `flex: 1` so four of them split the row evenly whichever stage this is — 131 units
+ * each on the portrait one, which is what sizes the type inside.
+ */
+.boxes-choice {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 12px 6px;
+  background: #fff8ec;
+  border: 6px solid #2a2438;
+  border-radius: 22px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The chosen one is filled with the app's one yellow, which means "this" everywhere else too. */
+.boxes-choice-on {
+  background: #ffd34e;
+  box-shadow: 0 8px 0 rgba(42, 36, 56, 0.16);
+}
+
+.boxes-choice:active {
+  transform: translateY(4px);
+}
+
+.boxes-choice-title {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.05;
+  color: #2a2438;
+}
+
+.boxes-choice-blurb {
+  font-family: Fredoka, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.1;
+  text-align: center;
+  color: #2a2438;
+  opacity: 0.6;
+}
+
+/*
+ * The two ways out of the result card, on one line. See the note where they are rendered.
+ *
+ * `flex-wrap` is what makes this one rule serve both stages: 640 units cannot hold two of these
+ * buttons, so on the portrait stage they wrap back into a stack on their own.
+ */
+.boxes-exits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+/*
+ * The result card waits a beat before it fades up, so the last sparkle is not cut off by it.
+ *
+ * `backwards` is what makes the delay work: without a fill mode the overlay is painted at full
+ * opacity for the length of the delay and then fades in from nothing, which is a flash followed
+ * by a fade rather than a fade.
+ */
+.boxes .overlay {
+  animation-fill-mode: backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boxes-claim {
+    animation: none;
+  }
+
+  .boxes-score-on {
+    transform: none;
   }
 }
