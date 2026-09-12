@@ -15,9 +15,17 @@ video. A block appears, its shape is spoken aloud, and you drag it to the hole i
 levels, their own level numbering and their own saved progress. Eighteen levels in total, and
 54 stars.
 
-**Plus an animal game**: four animals roam the screen and the narrator asks for one — "Can you
-touch the cow?" Find it and you get praised, hear the cow, and are invited to moo back. Sixteen
-animals, no levels, no score, nothing to lose.
+**Plus three things that are not tracks**, on the picker's bottom row:
+
+- **Animals** — four animals roam the screen and the narrator asks for one: "Can you touch the
+  cow?" Find it and you get praised, hear the cow, and are invited to moo back. Sixteen animals,
+  no levels, no score, nothing to lose.
+- **Memory** — pairs of animals face down; turn two over. Three, four then six pairs, stepping up
+  each time a board is finished. No score, no timer, no fail state.
+- **Boxes** — Dots and Boxes, for the older sibling. Two players, or a computer opponent at three
+  strengths. Under its own heading on the picker, **"Fun game for kids"**, because it is the one
+  thing in the app that teaches nothing and the one thing that can be lost; see
+  [The boxes game](#the-boxes-game).
 
 ## Commands
 
@@ -335,6 +343,175 @@ Rounds are drawn **from the arrangement**, not from the whole token space, which
 stops a number level asking for a numeral — or a letter level asking for a letter — that is not
 on the board. The four tokens per board are always distinct: two holes wanting the same thing
 would make one unreachable and the other ambiguous.
+
+## The boxes game
+
+**Dots and Boxes** ([boxes.ts](src/boxes.ts), [Boxes.tsx](src/components/Boxes.tsx)). Three rules,
+and the third is the game:
+
+1. Draw a line between two neighbouring dots.
+2. Close the **fourth side** of a box and it is yours — **then go again**, as many times over as
+   you keep closing boxes.
+3. The game ends when every line is drawn. Most boxes wins.
+
+**Rule 2 is why this is a real game.** Drawing the *third* side of a box hands it over for free, so
+the middle game is about being the last player with a harmless move left. The endgame is about
+**declining boxes on purpose**: when a chain is opened for you, taking all of it means you then have
+to open the next chain yourself, so taking all *but two* and drawing the line through the middle of
+the last two gives those two away and forces your opponent to open the next chain instead. Two boxes
+for the rest of the board is usually a bargain.
+
+### It is the one screen here that is not for a two-year-old
+
+Everything else in this app is recognition with no way to lose. This has a winner. That is
+deliberate rather than an oversight — it is here so an older sibling has something of their own in
+the app — but it does mean the picker now serves two audiences, and the consequences are visible in
+the design:
+
+- It is the **only** screen whose words are written to be read **by the player** rather than by the
+  adult beside them. The setup screen spells the three rules out, because the extra turn is the one
+  thing here that is not learnable by trying it: a player who has not been told about it reads their
+  own second move as the game having skipped their opponent.
+- It sits **last** in the bottom row, furthest from the colour track a two-year-old would be
+  reaching for.
+- It is **the only card on the picker with a category heading over it**: *Fun game for kids*. See
+  below.
+- The **Tiny** board is the little one's way in, and it is first in the size list.
+
+### Its own category on the picker
+
+The Boxes card carries a heading — **"Fun game for kids"** — and nothing else on the picker does.
+The four tracks are the app doing what its name says; the park and the memory board still are too,
+in that they teach animal names and where things were. Boxes teaches nothing, and it is the only
+thing here that can be lost. Left unlabelled among six cards that are all *Play and Learn*, it
+reads as a fifth thing to learn from.
+
+**The heading spans exactly the card beneath it** (both come from `extraSlotLeft` in
+[stage.ts](src/stage.ts), so they cannot drift apart). That is what scopes it to one card: a
+full-width heading over the bottom row would label Animals and Memory as well, and they are not in
+this category.
+
+**A fourth card row would have been the obvious way to separate it, and it does not fit on either
+stage.** The landscape picker would need about 782 units for four rows of cards against the 720 it
+has, and shrinking the track cards to make room reflows the title, blurb and status line inside all
+four of them. So the separation is a labelled band instead:
+
+- `menu.extraGap` (44 units) replaces the single `card.gap` that used to sit between the last track
+  row and the bottom row. That band is the only room the heading has.
+- The 44 units are bought by **starting the track grid higher** — `card.top` 188 → 176 in landscape,
+  190 → 170 in portrait — rather than by shrinking any card.
+- `wideTop` had to be corrected as part of this. It was `card.top + (height + gap) × rows`, which
+  multiplies the gap by the row count; the gap goes *between* rows, so it is `rows - 1` of them plus
+  the band once. The old form only gave the right answer because that extra gap was standing in for
+  a band nothing was using yet.
+
+### Four sizes, as a setting rather than a ramp
+
+| | Boxes | Lines | |
+|---|---|---|---|
+| **Tiny** | 4 | 12 | one idea in it; playable by a four-year-old |
+| **Small** | 9 | 24 | chains start to matter |
+| **Big** | 16 | 40 | the shape of the game as it is played on paper |
+| **Huge** | 25 | 60 | chain parity decides the result |
+
+This is **the opposite of the call the memory game makes**, which ramps its board size rather than
+offering it. The reason is that here the size changes what the game *is*, not just how long it
+takes. A ramp would start a thirteen-year-old on the toddler board and make them win their way out
+of it.
+
+Square only. The board is fitted into one square area on both stages, so one dimension is always
+slack — 420 units of it on the landscape stage, which is where the score cards go. Stretching the
+board into that slack would not make a 4×4 board any bigger, it would just stop it looking like the
+thing you draw on paper.
+
+### Three opponents, and they are three algorithms
+
+Not one algorithm with a randomness dial. A dial produces an opponent that plays well and then
+throws a game away for no reason, which a child reads as being let off. Each of these plays a
+coherent strategy, and the strategy is what the setup screen is naming:
+
+- **Rookie** — takes a box when one is going, otherwise plays anywhere. It will happily draw the
+  third side of a box and hand it over. That is how a beginner plays, and it is what makes it
+  beatable by a five-year-old.
+- **Tricky** — takes boxes, avoids handing any over, and when every move hands something over it
+  opens the **shortest** chain. Competent play, and where most people stop. It never declines a box,
+  so it loses the endgame to anyone who knows the double-cross.
+- **Sharp** — **solves the position outright** once few enough lines are left, and searches one move
+  deep with a playout to the end before that. It will decline boxes.
+
+**Sharp's solver is a negamax over a bitmask of the lines still free, with the mask as the whole
+memo key.** That last part is only sound because the value returned is *net boxes for whoever is to
+move*: at a node whose move claimed something the mover keeps the turn and the child value is
+**added**, and at one that claimed nothing the turn passes and the child value is **negated**. An
+absolute score would need the mover in the key and would double the table. The mask covers the lines
+that were free *at the root* rather than all of the board's, so the Huge board's 60 lines still
+compress into the 18 bits the solver is allowed to search.
+
+`EXACT_EDGES = 18` is 262,144 positions at one byte each — a 256KB `Int8Array`, sized to land inside
+the 480ms pause the screen already waits out for effect. What it buys, per board:
+
+| Board | Solved from | |
+|---|---|---|
+| Tiny | move 1 | 12 lines, so **Sharp cannot be beaten on Tiny** |
+| Small | move 7 | |
+| Big | move 23 | |
+| Huge | move 43 | late, but it still covers the endgame |
+
+Above 18 free lines, Sharp searches one move deep over **every** free line with a greedy playout as
+the evaluation. Narrowing the candidates to "capture if you can" is the obvious saving, and it is
+exactly what hides the double-cross — which is a move that captures nothing, played at a moment when
+captures are available.
+
+### The look and the touch are separate layers
+
+The board is a single SVG with `pointer-events: none`, and every line the player can draw is an
+invisible `<button>` on top of it. That split exists to let one geometry serve the eye and a
+different one serve the finger:
+
+- **The drawn line** spans the whole gap between two dots, corner to corner, because a closed box
+  has to look closed.
+- **The tap target** is **inset from both dots by 0.18 of the pitch**, so the target for a
+  horizontal line and the target for the vertical line leaving the same dot share an edge and *no
+  area at all*. That matters more here than anywhere else in the app: a mis-hit near a dot is not a
+  card you can turn back, it is a **move**, and a move is permanent.
+
+Drawing the line inside the button instead would have forced one geometry to do both jobs, and it
+would have been the visual that gave way.
+
+**Every line is a `<button>`**, same reasoning as the memory board and it applies more strongly:
+this screen is playable start to finish with Tab and Enter, and the focus ring is not decoration —
+without it a player tabbing through has no way to know which line Enter is about to draw.
+
+### Blue and orange, with a mark in every box
+
+Not red and green, which is the obvious two-player pair and is also both of the two colours that
+collide under every common kind of colour blindness. Blue and orange are the furthest apart in that
+respect. This is the same problem the colour track has, with a solution available here that is not
+available there — nothing on this screen has to *be* red or green.
+
+A **mark** is drawn in each claimed box on top of the colour (a circle for blue, a square for
+orange), for the same reason the colour track prints the colour's name under its hole: colour alone
+is one channel, and one channel is one thing to get wrong.
+
+### It adds no audio, and reuses the pools carefully
+
+- **You close a box** → applause plus a word of praise, from the same eleven-line pool the tracks
+  use. **Once per line, not once per box** — a line can claim two and a chain can run to five, and a
+  praise clip per box overruns the next one and turns the best moment in the game into noise.
+- **The computer closes a box** → `bonk`, an impact with no verdict attached. Using the
+  wrong-answer tone there would tell a child they had made a mistake, when what happened is that
+  their opponent played well.
+- **The board fills** → `cheer` if you won, `nextlevel` on a draw, `tryagain` if you lost — which is
+  literally the words, and the right thing to say about a loss.
+
+### The computer waits 480ms before drawing
+
+Not for realism: the move is ready in single-digit milliseconds. It is because a line that appears
+on the same frame as yours does not read as a reply, and because during a chain of captures an
+instant five-box sweep reads as a bug rather than as a beating. Each line is one pass of the effect
+rather than a loop, so a chain arrives *as* a chain — and the cleanup on that effect is
+load-bearing, not tidiness: without it, leaving the screen mid-think fires a move worked out from a
+position that has been thrown away.
 
 ## Scoring
 
@@ -798,6 +975,35 @@ finger must never scroll, rubber-band, select text or pinch-zoom the board away.
 >                - only the played track written, survives a reload
 > stale record   a v2 record is discarded, not misread: all four tracks
 >                return to 0 rather than resuming at a bogus index
+> ```
+>
+> And for the boxes game, with `bun` on the rules module and Playwright on the screen:
+>
+> ```
+> topology       all four sizes: line and box counts, four distinct sides
+>                per box, every line borders one or two boxes, boxesOf
+>                inverts sidesOf, edge ids round-trip through edgeAt
+> rule 2         claiming keeps the turn, claiming nothing passes it, one
+>                line CAN claim two boxes at once (and still gets only one
+>                extra turn), replaying a drawn line is a no-op
+> termination    every size plays to a full board with every box claimed
+> skill order    120 games, alternating who opens: sharp > tricky > rookie
+>                on both 3x3 and 4x4, by net boxes, in every pairing
+> latency        slowest Sharp move over a full game: 1ms on Tiny, 65ms on
+>                Small and Big, 68ms on Huge - all inside the 480ms pause
+> full game      Small vs Sharp played out in the browser: reaches a result,
+>                no undrawn lines left, scores sum to 9, and the banner
+>                shows "again!" mid-chain
+> keyboard       Tab reaches a line, Enter draws it
+> teardown       leaving the screen mid-think does not fire the pending move
+> geometry       all 4 sizes x both stages, measured in the DOM: 18 units
+>                between the board artwork and the score cards, >=34 between
+>                the turn banner and the top row of dots, nothing outside
+>                the stage
+> picker         both stages: the "Fun game for kids" heading spans exactly
+>                the Boxes card and no other, sits above it rather than on
+>                it, clears the track grid, and the bottom row is still
+>                inside the stage after the reflow (694/720, 1074/1138)
 > console        no errors or page errors on any screen
 >
 > all 4 tracks   level 1 of colours, shapes, numbers AND letters played to
@@ -886,6 +1092,18 @@ check compares durations rather than names: several clips are the same length ("
 
 ## Known gaps
 
+- **The memory game is not documented here.** It was added in its own commit and this README was
+  not updated with it, so the only account of why it works the way it does is the header comment in
+  [memory.ts](src/memory.ts) — which is thorough, but it is not where anyone would look first. The
+  intro list above now at least mentions the game exists.
+- **Sharp is unbeatable on Tiny.** That board is 12 lines, which is inside `EXACT_EDGES`, so it
+  plays perfectly from the opening. The pairing is a choice made on a screen that says "plays to
+  win", so it is informed rather than a trap — but nothing warns about it, and a four-year-old who
+  picks the small board and the strong opponent loses 0–4 every time.
+- **The Huge board has the smallest tap targets in the app on a landscape phone.** 59×33 logical
+  units, which is roughly 24×14 real pixels in an 800×400 window. Fine on a tablet and fine in
+  portrait (72×40). It is the same landscape-phone squeeze everything else here has, and this
+  screen feels it most because its targets are the thinnest thing in the app.
 - **No spoken question, only the shape name.** The video asks "which hole does it fit?";
   the game just says "circle". Deliberate — the full sentence every round becomes
   something to sit through — but a first-round-only long form would be better than

@@ -2,7 +2,7 @@ import { ANIMALS, type AnimalId } from "../animals";
 import { zooArt } from "../critters/zoo";
 import { HUES } from "../hues";
 import type { Mode } from "../levels";
-import { MENU, SHAPES, STAGE } from "../stage";
+import { MENU, SHAPES, STAGE, extraSlotLeft } from "../stage";
 import { maxStars, TOTAL_STARS, TRACKS, type Track } from "../tracks";
 import type { Progress } from "../native";
 import { colors, fonts } from "../theme";
@@ -275,35 +275,90 @@ const MemoryIcon = ({ height }: { height: number }) => (
 );
 
 /**
- * One of the two cards on the bottom row: the park, and the memory board.
+ * A two-card icon for the boxes game, in the same flat-ink style as the rest.
  *
- * NEITHER IS A TRACK, and the card says so by being shaped differently from the four above —
- * icon over title rather than beside it, centred rather than left-aligned, and no star count
- * because there is nothing to score. A fifth and sixth card identical to the tracks would
- * promise that they behave like them: levels, stars, somewhere to get to.
+ * A 2x2 dot grid mid-game: three lines down, one box closed. The closed box is the whole point
+ * of the game and a grid of bare dots would advertise nothing, so the icon is a POSITION rather
+ * than a picture of equipment — the same choice the four track icons make by being drawn from
+ * the real polygons and hues.
+ */
+const BoxesIcon = ({ height }: { height: number }) => (
+  <svg
+    height={height}
+    viewBox="0 0 100 100"
+    style={{ display: "block", flex: "none" }}
+    aria-hidden="true"
+  >
+    {/* The closed box, top left. Blue, which is player one everywhere in that game. */}
+    <rect x="14" y="14" width="36" height="36" fill="#3D8BF5" />
+
+    {/* Its four sides, plus one more line hanging off the grid so the board looks mid-game. */}
+    {[
+      [14, 14, 50, 14],
+      [14, 50, 50, 50],
+      [14, 14, 14, 50],
+      [50, 14, 50, 50],
+    ].map(([x1, y1, x2, y2]) => (
+      <line
+        key={`${x1}-${y1}-${x2}-${y2}`}
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="#1B5AB8"
+        strokeWidth={9}
+        strokeLinecap="round"
+      />
+    ))}
+    <line
+      x1="50"
+      y1="86"
+      x2="86"
+      y2="86"
+      stroke="#B85F13"
+      strokeWidth={9}
+      strokeLinecap="round"
+    />
+
+    {[14, 50, 86].map((cy) =>
+      [14, 50, 86].map((cx) => (
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={7} fill={colors.ink} />
+      )),
+    )}
+  </svg>
+);
+
+/**
+ * One of the three cards on the bottom row: the park, the memory board, and the boxes game.
  *
- * Stacked rather than side-by-side internally, because this card is half the width of the row
- * and at 230 units — which is what it comes to in portrait — a title beside an icon leaves too
- * little for either.
+ * NONE OF THEM IS A TRACK, and the card says so by being shaped differently from the four above
+ * — icon over title rather than beside it, centred rather than left-aligned, and no star count
+ * because there is nothing to score. A card identical to the tracks would promise that it
+ * behaves like one: levels, stars, somewhere to get to.
+ *
+ * Stacked rather than side-by-side internally, because this card is a third of the row and at
+ * 147 units — which is what it comes to in portrait — a title beside an icon leaves too little
+ * for either. Its type sizes come from the layout for the same reason; see `extraTitleSize`.
  */
 const ExtraCard = ({
   icon,
   title,
   blurb,
-  left,
+  slot,
   onPress,
 }: {
   icon: React.ReactNode;
   title: string;
   blurb: string;
-  left: number;
+  /** Which of the three places in the bottom row, left to right. */
+  slot: number;
   onPress: () => void;
 }) => (
   <button
     type="button"
     className="menu-card menu-card-extra"
     style={{
-      left,
+      left: extraSlotLeft(slot),
       top: MENU.wideTop,
       width: MENU.extraWidth,
       height: MENU.card.height,
@@ -316,7 +371,7 @@ const ExtraCard = ({
       style={{
         fontFamily: fonts.display,
         fontWeight: 800,
-        fontSize: 34,
+        fontSize: MENU.extraTitleSize,
         lineHeight: 1,
         color: colors.ink,
       }}
@@ -328,7 +383,7 @@ const ExtraCard = ({
       style={{
         fontFamily: fonts.sans,
         fontWeight: 600,
-        fontSize: 19,
+        fontSize: MENU.extraBlurbSize,
         lineHeight: 1.1,
         color: colors.text,
         opacity: 0.6,
@@ -346,11 +401,14 @@ export const Menu = ({
   onAnimals,
   /** Nor is the memory board. See memory.ts. */
   onMemory,
+  /** Nor is the boxes game, which is not even for the same age. See boxes.ts. */
+  onBoxes,
 }: {
   progress: Progress;
   onPick: (id: Mode) => void;
   onAnimals: () => void;
   onMemory: () => void;
+  onBoxes: () => void;
 }) => {
   const banked = TRACKS.reduce(
     (sum, t) => sum + (progress[t.id]?.stars ?? 0),
@@ -445,10 +503,14 @@ export const Menu = ({
       ))}
 
       {/*
-        The bottom row: the two things that are not tracks. See ExtraCard.
+        The bottom row: the three things that are not tracks. See ExtraCard.
+
+        Boxes goes last, and not only because it is newest. It is the one thing here that is NOT
+        for a two-year-old — it has an opponent and it can be lost — so it sits at the far end of
+        the row, furthest from the colour track a child of that age would be reaching for.
       */}
       <ExtraCard
-        left={MENU.card.left}
+        slot={0}
         icon={<AnimalStrip />}
         title="Animals"
         blurb={`${ANIMALS.length} animals to meet`}
@@ -456,13 +518,48 @@ export const Menu = ({
       />
 
       <ExtraCard
-        left={MENU.card.left + MENU.extraWidth + MENU.card.gap}
+        slot={1}
         icon={<MemoryIcon height={MENU.stripHeight} />}
         title="Memory"
         blurb="Find the pairs"
         onPress={onMemory}
       />
 
+      {/*
+        BOXES IS ITS OWN CATEGORY, and this heading is the whole of what makes that true on
+        screen. "Play and Learn" is four learning tracks, and the park and the memory board are
+        still the app doing its job — naming animals, remembering where things are. Boxes is the
+        only thing here that teaches nothing and the only thing that can be lost, so it is
+        labelled rather than left to look like a fifth thing to learn from.
+
+        THE HEADING SPANS EXACTLY THE CARD UNDER IT, from the same `extraSlotLeft`, which is
+        what scopes it to this one card rather than to the row. A full-width heading would read
+        as a label on Animals and Memory too, and they are not in this category.
+
+        It sits in the band `extraGap` opens up above the bottom row. That band is why the track
+        grid now starts higher; see the note on `extraGap`. A fourth card row — the obvious way
+        to separate this — does not fit on either stage.
+      */}
+      <div
+        className="menu-category"
+        style={{
+          left: extraSlotLeft(2),
+          top: MENU.wideTop - MENU.extraGap,
+          width: MENU.extraWidth,
+          height: MENU.extraGap,
+          fontSize: MENU.categorySize,
+        }}
+      >
+        Fun game for kids
+      </div>
+
+      <ExtraCard
+        slot={2}
+        icon={<BoxesIcon height={MENU.stripHeight} />}
+        title="Boxes"
+        blurb="Close a box, go again"
+        onPress={onBoxes}
+      />
     </div>
   );
 };

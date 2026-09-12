@@ -100,6 +100,35 @@ type LayoutSpec = {
      */
     stripHeight: number;
     stripCount: number;
+    /**
+     * Type sizes for the bottom row's cards.
+     *
+     * Their own sizes rather than the track cards', because that row holds THREE cards now and
+     * each is a third of the grid — 272 units on the wide stage and 147 on the tall one, against
+     * 420 and 480 for a track card. At the track card's 34px a title as ordinary as "Animals"
+     * does not fit across the portrait one.
+     */
+    extraTitleSize: number;
+    extraBlurbSize: number;
+    /**
+     * Type size for a category heading over one of the bottom-row cards.
+     *
+     * See `extraGap` for the band it sits in, and `extraSlotLeft` for placing it over a card.
+     */
+    categorySize: number;
+    /**
+     * The band between the last row of track cards and the bottom row.
+     *
+     * WIDER THAN `card.gap`, and that difference is the entire room a category heading has to
+     * live in. It was one `card.gap` — 24 units on the wide stage and 20 on the tall one — and
+     * a heading does not go in 20 units.
+     *
+     * The room is bought by starting the track grid higher rather than by shrinking anything.
+     * Neither stage has a fourth card row in it to give: the landscape picker would need 782
+     * units for four rows against the 720 it has, and shrinking the track cards to fit reflows
+     * the title, blurb and status line inside all four of them.
+     */
+    extraGap: number;
   };
   memory: {
     /** The rectangle the card grid is fitted into and centred in. */
@@ -114,6 +143,24 @@ type LayoutSpec = {
      * formula that gets both right is longer than the table.
      */
     cols: Record<number, number>;
+  };
+  boxes: {
+    /**
+     * The rectangle the dot grid is fitted into. The grid is SQUARE and centred in it.
+     *
+     * Square because the four board sizes are square (see SIZES in boxes.ts), so one of the two
+     * dimensions is always slack — 420 units of it on the landscape stage. That slack is where
+     * the score cards go rather than something to stretch the board into: a 4x4 board drawn as
+     * an oblong is still a 4x4 board, it just stops looking like the thing you draw on paper.
+     */
+    area: { left: number; top: number; width: number; height: number };
+    /**
+     * The two score cards, which sit under the board.
+     *
+     * No `top` here: it follows the bottom edge of the board, and how far down that is depends
+     * on which of the four sizes is in play. components/Boxes.tsx works it out from `boxesGrid`.
+     */
+    score: { left: number; width: number; height: number; gap: number };
   };
   hud: {
     starSize: number;
@@ -138,17 +185,41 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
     blockHome: { x: 500, y: 225 },
     critter: { x: 570, y: 60, width: 400 },
     menu: {
-      card: { width: 420, height: 150, gap: 24, left: 63, top: 188 },
+      card: { width: 420, height: 150, gap: 24, left: 63, top: 176 },
       cols: 2,
       titleSize: 68,
       scoreSize: 40,
-      stripHeight: 64,
+      /*
+       * Three animals rather than the four the full-width banner had, at 56 rather than 64. A
+       * third of the row is 272 units and the card's padding leaves 248 of it; four heads at 64
+       * tall run to 304 and pushed the title off the card.
+       */
+      stripHeight: 56,
       stripCount: 3,
+      extraTitleSize: 30,
+      extraBlurbSize: 17,
+      categorySize: 21,
+      extraGap: 44,
     },
     memory: {
       area: { left: 60, top: 132, width: 880, height: 542 },
       gap: 22,
       cols: { 6: 3, 8: 4, 12: 4 },
+    },
+    /*
+     * 424 square: 146 above it, 424 of board, half a dot of overhang, 22 of gap, 90 of score
+     * card, and 26 spare at the bottom on the tightest of the four sizes.
+     *
+     * THE 146 IS THE TIGHT NUMBER ON THIS STAGE, and it is not slack. The turn banner lives in
+     * the head and is as wide as the longest name it has to hold, so it reaches across to about
+     * 373 — past 277, where a 430-wide board centred in this area starts. Nothing keeps the two
+     * apart except the clearance under the banner, and the banner's own bottom edge is at 100,
+     * not at the 92 the menu button would suggest. The board's artwork starts half a dot ABOVE
+     * this number too, which is the other half of what went wrong at 116.
+     */
+    boxes: {
+      area: { left: 60, top: 146, width: 880, height: 424 },
+      score: { left: 90, width: 400, height: 90, gap: 22 },
     },
     hud: { starSize: 30, stack: false },
   },
@@ -172,17 +243,35 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
        * One column. Two 420-wide cards do not fit across 640, and narrowing them wraps all
        * three lines of text inside — see the note on CARD in Menu.tsx.
        */
-      card: { width: 480, height: 160, gap: 20, left: 80, top: 190 },
+      card: { width: 480, height: 160, gap: 20, left: 80, top: 170 },
       cols: 1,
       titleSize: 46,
       scoreSize: 32,
-      stripHeight: 52,
+      /*
+       * Two animals at 38, down from two at 52, for the same reason the type shrank: a third of
+       * this row is 147 units and the card's padding leaves 123 of it. Two heads at 52 tall are
+       * 122 wide plus their gap, which is over by just enough to clip the second one.
+       */
+      stripHeight: 38,
       stripCount: 2,
+      extraTitleSize: 22,
+      extraBlurbSize: 13,
+      categorySize: 15,
+      extraGap: 44,
     },
     memory: {
       area: { left: 50, top: 210, width: 540, height: 856 },
       gap: 20,
       cols: { 6: 2, 8: 2, 12: 3 },
+    },
+    /*
+     * 560 square, bound by the width rather than the height. The area is 700 tall and the board
+     * is centred in it, which is what keeps the board off the top of the stage on the Tiny size
+     * — whose pitch is capped, so its board is only 320 of the 560 available.
+     */
+    boxes: {
+      area: { left: 40, top: 190, width: 560, height: 700 },
+      score: { left: 40, width: 260, height: 120, gap: 22 },
     },
     hud: { starSize: 26, stack: true },
   },
@@ -227,18 +316,38 @@ export const MENU = {
   scoreSize: 0,
   stripHeight: 0,
   stripCount: 0,
+  extraTitleSize: 0,
+  extraBlurbSize: 0,
+  categorySize: 0,
+  extraGap: 0,
   /** The bottom row, spanning the whole card grid. See the note in Menu.tsx. */
   wideWidth: 0,
   wideTop: 0,
   /**
-   * One of the two cards that share the bottom row: the park and the memory board.
+   * One of the THREE cards that share the bottom row: the park, the memory board and the boxes
+   * game.
    *
    * They share a row rather than taking one each, and that is a space constraint as much as a
-   * design one. A second full-width banner runs the landscape picker to 860 units inside a
-   * 720-tall stage. Side by side they cost the row that was already there.
+   * design one. Both pickers are already full to the bottom of the stage — the landscape one
+   * ends 34 units short of 720 and the portrait one 68 short of 1138 — so there is nowhere for
+   * a fourth row to go, and shortening every card to make one would reflow the text inside all
+   * seven. Three across costs only the width of the row that was already there.
    */
   extraWidth: 0,
 };
+
+/** How many cards share the picker's bottom row. See `extraWidth`. */
+export const EXTRA_CARDS = 3;
+
+/**
+ * The left edge of one of the bottom row's slots, numbered left to right.
+ *
+ * Here rather than in Menu.tsx because two things need it and have to agree exactly: the card,
+ * and the category heading sitting directly over it. Working it out twice is how a heading ends
+ * up four units off the card it is labelling.
+ */
+export const extraSlotLeft = (slot: number): number =>
+  MENU.card.left + slot * (MENU.extraWidth + MENU.card.gap);
 
 /** Top-bar geometry. See the note on `stack`. */
 export const HUD = { starSize: 0, stack: false };
@@ -285,6 +394,56 @@ export const memoryGrid = (
   };
 };
 
+const BOXES_AREA = { left: 0, top: 0, width: 0, height: 0 };
+
+/** Where the boxes game's two score cards go, and how big. See the note in the layout spec. */
+export const BOXES_SCORE = { left: 0, width: 0, height: 0, gap: 0 };
+
+/**
+ * The dot pitch for a board this many boxes across, capped.
+ *
+ * WITHOUT THE CAP the Tiny board is drawn at the same overall size as the Huge one, which means
+ * four boxes 230 units across with lines 23 units thick. It does not read as a small board, it
+ * reads as a zoomed-in one — and on the landscape stage it also pushes the dots hard against
+ * the top and bottom of the area. 160 keeps Tiny at 320 square and leaves Small, Big and Huge
+ * bound by the area, which is where they should be.
+ */
+const MAX_PITCH = 160;
+
+/**
+ * Where the dot grid goes and how far apart the dots are.
+ *
+ * Returns the rectangle spanned by the DOTS, not by the board's artwork: the outermost dots sit
+ * exactly on its edge, and both the dot radius and half a line's thickness overhang it. That is
+ * why the areas above are inset from the stage rather than flush with it.
+ */
+export const boxesGrid = (
+  cols: number,
+  rows: number,
+): {
+  pitch: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} => {
+  const pitch = Math.min(
+    MAX_PITCH,
+    BOXES_AREA.width / cols,
+    BOXES_AREA.height / rows,
+  );
+  const width = pitch * cols;
+  const height = pitch * rows;
+
+  return {
+    pitch,
+    width,
+    height,
+    left: BOXES_AREA.left + (BOXES_AREA.width - width) / 2,
+    top: BOXES_AREA.top + (BOXES_AREA.height - height) / 2,
+  };
+};
+
 let cols = 1;
 let rowPitch = 0;
 let colGap = 0;
@@ -314,25 +473,40 @@ export const applyLayout = (next: Orientation): void => {
     scoreSize: spec.menu.scoreSize,
     stripHeight: spec.menu.stripHeight,
     stripCount: spec.menu.stripCount,
+    extraTitleSize: spec.menu.extraTitleSize,
+    extraBlurbSize: spec.menu.extraBlurbSize,
+    categorySize: spec.menu.categorySize,
+    extraGap: spec.menu.extraGap,
     wideWidth:
       spec.menu.card.width * spec.menu.cols +
       spec.menu.card.gap * (spec.menu.cols - 1),
-    /* Below however many rows the four track cards take at this column count. */
+    /*
+     * Below however many rows the four track cards take at this column count, plus the band the
+     * category heading sits in.
+     *
+     * Note the gap count: `card.gap` goes BETWEEN the track rows, so there are rows-1 of them
+     * and then `extraGap` once. The old form multiplied the gap by the row count, which
+     * happened to give the right answer only because it was standing in for this band.
+     */
     wideTop:
       spec.menu.card.top +
-      (spec.menu.card.height + spec.menu.card.gap) *
-        Math.ceil(4 / spec.menu.cols),
+      spec.menu.card.height * Math.ceil(4 / spec.menu.cols) +
+      spec.menu.card.gap * (Math.ceil(4 / spec.menu.cols) - 1) +
+      spec.menu.extraGap,
     extraWidth:
       (spec.menu.card.width * spec.menu.cols +
         spec.menu.card.gap * (spec.menu.cols - 1) -
-        spec.menu.card.gap) /
-      2,
+        spec.menu.card.gap * (EXTRA_CARDS - 1)) /
+      EXTRA_CARDS,
   });
 
   Object.assign(HUD, spec.hud);
   Object.assign(MEMORY_AREA, spec.memory.area);
   memoryGap = spec.memory.gap;
   memoryCols = spec.memory.cols;
+
+  Object.assign(BOXES_AREA, spec.boxes.area);
+  Object.assign(BOXES_SCORE, spec.boxes.score);
 
   cols = spec.cols;
   rowPitch = spec.rowPitch;

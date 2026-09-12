@@ -313,6 +313,34 @@ body {
 }
 
 /*
+ * A category heading over one of the bottom-row cards. Currently only "Fun game for kids".
+ *
+ * Sized and placed entirely from the layout - it spans exactly the card beneath it and fills
+ * the `extraGap` band above the row. See where it is rendered in Menu.tsx for why it is scoped
+ * to one card rather than to the whole row.
+ *
+ * BOTTOM-ALIGNED inside its band, so the heading sits against the card it labels rather than
+ * floating between that card and the track grid above. `flex-end` rather than a margin because
+ * the text wraps to two lines on the portrait stage, where the card is 147 units wide - and a
+ * margin would push a two-line heading up into the track cards.
+ */
+.menu-category {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  color: #2a2438;
+  opacity: 0.62;
+  /* The card below owns every tap in this corner of the picker; the label must never eat one. */
+  pointer-events: none;
+}
+
+/*
  * Back to the picker, from the HUD.
  *
  * Both of these are load-bearing rather than tidying. The HUD sets `pointer-events: none` so a
@@ -860,5 +888,271 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .memory-inner {
     transition: none;
+  }
+}
+
+/*
+ * THE BOXES GAME
+ *
+ * Dots and Boxes. Positioned in the same logical units as everything else on the stage, so the
+ * board scales with the one transform.
+ *
+ * The board is an SVG that takes no pointer events at all, with an invisible button over every
+ * line the player can draw. The note at the top of components/Boxes.tsx explains why the look
+ * and the touch are separate layers; these rules are the half of it that lives in CSS.
+ */
+.boxes {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 320ms ease-out;
+}
+
+.boxes-head {
+  position: absolute;
+  left: 33px;
+  right: 33px;
+  top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.boxes-title {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 44px;
+  color: #2a2438;
+}
+
+/*
+ * Whose turn it is. Outlined in that player's colour rather than filled with it, because it sits
+ * next to two score cards outlined the same way and a third filled block would read as a third
+ * player.
+ */
+.boxes-turn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /*
+   * 26px rather than the 30 the score cards use, and the padding to match. This banner is the
+   * only thing in the head that sits over where the board begins on the landscape stage, so
+   * every unit of its height is a unit of clearance above the top row of dots. See the note on
+   * the landscape `boxes.area`.
+   */
+  padding: 8px 20px;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  white-space: nowrap;
+  color: #2a2438;
+  background: #fff8ec;
+  border: 6px solid #2a2438;
+  border-radius: 999px;
+}
+
+/*
+ * The board. `pointer-events: none` is the load-bearing line in this whole file: without it the
+ * SVG sits over the buttons and the game cannot be played at all.
+ */
+.boxes-art {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+/* A claimed box fades its colour in. No scale pop: scaling an SVG group needs `transform-box`
+   to behave, and a box that grows out of the corner of the board on the browsers where it does
+   not is worse than a box that simply appears. */
+.boxes-claim {
+  animation: fade-in 260ms ease-out;
+}
+
+/*
+ * The line just drawn, in the one yellow this app uses for "look here".
+ *
+ * A static glow rather than an animation, and that is a constraint rather than a preference: the
+ * lines are keyed by edge id and never remount, so adding an animating class to one would not
+ * restart anything. It earns its keep most when the computer moves — it is the only thing that
+ * says WHICH of the forty lines just appeared.
+ */
+.boxes-line-new {
+  filter: drop-shadow(0 0 7px rgba(255, 211, 78, 0.95));
+}
+
+/*
+ * One tap target per undrawn line. Invisible, and deliberately so — the line under it in the SVG
+ * is the thing being pointed at, and a visible target on every one of sixty would bury the board.
+ *
+ * The focus ring is the exception and is not decoration: this screen is playable with a keyboard
+ * (see the file header), and without a ring a player tabbing through has no way to know which
+ * line Enter is about to draw.
+ */
+.boxes-edge {
+  position: absolute;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.boxes-edge:disabled {
+  cursor: default;
+}
+
+.boxes-edge:focus-visible {
+  outline: 4px solid #ffd34e;
+  outline-offset: 0;
+}
+
+.boxes-score {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 22px;
+  background: #fff8ec;
+  /* The colour comes from the player, inline. Everything else about the two cards is identical. */
+  border: 6px solid #2a2438;
+  border-radius: 26px;
+}
+
+/*
+ * The card of whoever is to move lifts. It is the same information as the turn banner, put where
+ * the player is already looking — at the score — and it is the only cue that survives a player
+ * who has stopped reading the banner three moves ago.
+ */
+.boxes-score-on {
+  box-shadow: 0 10px 0 rgba(42, 36, 56, 0.16);
+  transform: translateY(-4px);
+}
+
+/*
+ * THE SETUP SCREEN
+ *
+ * The only screen in this app written to be read by the person playing. See the note on `phase`
+ * in components/Boxes.tsx.
+ */
+.boxes-setup {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  top: 130px;
+  bottom: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.boxes-rules {
+  margin: 0 0 10px;
+  padding: 0 0 0 32px;
+  font-family: Fredoka, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.45;
+  color: #2a2438;
+  opacity: 0.8;
+}
+
+.boxes-group-title {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  color: #2a2438;
+  opacity: 0.65;
+}
+
+.boxes-row {
+  display: flex;
+  align-self: stretch;
+  gap: 12px;
+}
+
+/*
+ * One choice. `flex: 1` so four of them split the row evenly whichever stage this is — 131 units
+ * each on the portrait one, which is what sizes the type inside.
+ */
+.boxes-choice {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 12px 6px;
+  background: #fff8ec;
+  border: 6px solid #2a2438;
+  border-radius: 22px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The chosen one is filled with the app's one yellow, which means "this" everywhere else too. */
+.boxes-choice-on {
+  background: #ffd34e;
+  box-shadow: 0 8px 0 rgba(42, 36, 56, 0.16);
+}
+
+.boxes-choice:active {
+  transform: translateY(4px);
+}
+
+.boxes-choice-title {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.05;
+  color: #2a2438;
+}
+
+.boxes-choice-blurb {
+  font-family: Fredoka, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.1;
+  text-align: center;
+  color: #2a2438;
+  opacity: 0.6;
+}
+
+/*
+ * The two ways out of the result card, on one line. See the note where they are rendered.
+ *
+ * `flex-wrap` is what makes this one rule serve both stages: 640 units cannot hold two of these
+ * buttons, so on the portrait stage they wrap back into a stack on their own.
+ */
+.boxes-exits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+/*
+ * The result card waits a beat before it fades up, so the last sparkle is not cut off by it.
+ *
+ * `backwards` is what makes the delay work: without a fill mode the overlay is painted at full
+ * opacity for the length of the delay and then fades in from nothing, which is a flash followed
+ * by a fade rather than a fade.
+ */
+.boxes .overlay {
+  animation-fill-mode: backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boxes-claim {
+    animation: none;
+  }
+
+  .boxes-score-on {
+    transform: none;
   }
 }

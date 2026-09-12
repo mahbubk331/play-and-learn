@@ -9,6 +9,7 @@ import {
   Sparkles,
   WrongMark,
 } from "./components/Feedback";
+import { Boxes } from "./components/Boxes";
 import { Hud } from "./components/Hud";
 import { Memory } from "./components/Memory";
 import { Menu } from "./components/Menu";
@@ -123,18 +124,18 @@ const Block = ({
 /**
  * Which screen is up.
  *
- * Four, and there is no router: "menu" is the picker, "playing" is one of the four level
- * tracks, "animals" is the park and "memory" is the matching-pairs board.
-
- * The park and the memory board are their own screens rather than a fifth and sixth track
- * because neither is a level ladder over the token model — see animals.ts and memory.ts.
+ * Five, and there is no router: "menu" is the picker, "playing" is one of the four level tracks,
+ * "animals" is the park, "memory" is the matching-pairs board and "boxes" is Dots and Boxes.
+ *
+ * The last three are their own screens rather than tracks five, six and seven because none of
+ * them is a level ladder over the token model — see animals.ts, memory.ts and boxes.ts.
  *
  * The park is its own screen rather than a fifth track because it is not a game — no levels, no
  * rounds, no score, no wrong answer (see animals.ts). Everything about a TRACK comes from the
- * selected Track, so for the four games this really is the whole navigation model; the park just
- * needs somewhere to be.
+ * selected Track, so for the four games this really is the whole navigation model; the other
+ * three just need somewhere to be.
  */
-type Screen = "menu" | "playing" | "animals" | "memory";
+type Screen = "menu" | "playing" | "animals" | "memory" | "boxes";
 
 export const App = () => {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -485,6 +486,19 @@ export const App = () => {
   };
 
   /**
+   * Open the boxes game.
+   *
+   * Nothing to resume and nothing to set up, like the park and the memory board — and here that
+   * is not only because it holds no progress. The board size and the opponent are chosen on the
+   * game's own setup screen every time, so there is no saved state that a resume could restore
+   * to the wrong thing. See the note on `phase` in components/Boxes.tsx.
+   */
+  const openBoxes = () => {
+    audio.current.unlock();
+    setScreen("boxes");
+  };
+
+  /**
    * Back to the picker, from the HUD button, the park, or finishing a track.
    *
    * Phase is reset on the way out. Leaving it as "correct" would leave a feedback timer to fire
@@ -619,6 +633,7 @@ export const App = () => {
             onPick={pickTrack}
             onAnimals={openAnimals}
             onMemory={openMemory}
+            onBoxes={openBoxes}
           />
         ) : screen === "animals" ? (
           <Animals
@@ -631,6 +646,18 @@ export const App = () => {
             onMenu={goMenu}
             onSound={(clip) => audio.current.playAlone(clip as SoundName)}
             clipLength={(clip) => audio.current.duration(clip as SoundName)}
+          />
+        ) : screen === "boxes" ? (
+          /*
+            `play` rather than the `playAlone` the other two screens get, because a claimed box
+            fires the applause and a word of praise as one gesture — the same overlap the tracks
+            use on a correct answer, and the thing `playAlone` exists to prevent.
+          */
+          <Boxes
+            onMenu={goMenu}
+            onSound={(clip, delay) =>
+              audio.current.play(clip as SoundName, delay)
+            }
           />
         ) : (
           <>
