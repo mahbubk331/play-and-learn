@@ -287,10 +287,23 @@ body {
 .menu-card-text {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   /* Without this the flex item refuses to shrink and a long blurb pushes the card wider than
      the two columns allow. */
   min-width: 0;
+}
+
+/*
+ * The animal park's card: full width, across the bottom.
+ *
+ * Shaped differently from the four game cards ON PURPOSE. It is not a game - no levels, no
+ * score, nothing to finish - and a fifth identical card would promise that it behaves like the
+ * others. A banner reads as "and also this", which is what it is. It also avoids an empty sixth
+ * cell in a 2x3 grid, which looks like something failed to load.
+ */
+.menu-card-wide {
+  gap: 30px;
+  padding: 14px 34px;
 }
 
 /*
@@ -322,6 +335,234 @@ body {
 .hud-menu:active {
   transform: translateY(3px);
   box-shadow: 0 3px 0 rgba(42, 36, 56, 0.16);
+}
+
+/*
+ * THE ANIMAL PARK
+ *
+ * Free play: twelve animals, touch one and it makes its noise and moves. No scoring, so none
+ * of the HUD applies and this screen owns its whole layout.
+ */
+.zoo {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 320ms ease-out;
+}
+
+.zoo-head {
+  position: absolute;
+  left: 33px;
+  top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/*
+ * Layer 1: the crossing, and the hit area.
+ *
+ * NO BOX. This was a bordered card per animal, which read as a form to fill in — and the border
+ * was doing no work, because the animal inside it is already the thing you look at and aim for.
+ * What survives of the box is its GEOMETRY: a transparent, generously rectangular target, because
+ * irregular artwork is a poor thing to aim at with a two-year-old's hands.
+ *
+ * The button IS the drifting element, deliberately. Anything else — a static button wrapping a
+ * moving animal, or a moving animal inside a fixed hit area — means the thing you can tap and the
+ * thing you can see are in different places.
+ *
+ * `--travel` is set per animal in Animals.tsx, which is what lets one keyframe set serve both
+ * directions and every size.
+ */
+.zoo-roam-x {
+  position: absolute;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* A toddler will drag across this screen rather than tapping cleanly. None of that may
+     scroll, select or rubber-band. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  animation-name: zoo-roam-x;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/*
+ * Layer 2: the vertical sweep, on a DIFFERENT period from the horizontal one.
+ *
+ * That difference is the whole mechanism. Two oscillations whose periods do not divide each other
+ * drift in and out of phase, so the path traced is a slowly-precessing loop that wanders over the
+ * whole field instead of retracing one line. It is a Lissajous figure, and it costs no JavaScript:
+ * no rAF loop, no position state, nothing running between taps.
+ *
+ * `alternate` on both, so each sweep reverses rather than snapping back to its start.
+ */
+.zoo-roam-y {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  animation-name: zoo-roam-y;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/*
+ * `--span-x` and `--span-y` are set per animal in Animals.tsx, computed from the field size and
+ * the animal's own size so the sweep can never carry it off the stage. One keyframe pair serves
+ * every animal at every size.
+ */
+@keyframes zoo-roam-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--span-x));
+  }
+}
+
+@keyframes zoo-roam-y {
+  from {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  to {
+    transform: translateY(var(--span-y)) rotate(1.5deg);
+  }
+}
+
+/*
+ * Layer 3: the pop. A SEPARATE element again, for the same reason — three animations on one
+ * element would leave only the last one working.
+ */
+.zoo-art {
+  /* Grows from the feet, so a hop leaves the ground rather than shrinking about the middle. */
+  transform-origin: 50% 100%;
+  /* A flat offset shadow, matching the blocks and the reward critters. Without it a floating
+     animal reads as pasted onto the background rather than hovering over it. */
+  filter: drop-shadow(0 9px 0 rgba(42, 36, 56, 0.13));
+}
+
+.zoo-art > svg {
+  display: block;
+}
+
+.zoo-name {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #2a2438;
+  opacity: 0.6;
+}
+
+/*
+ * Ambient motion is the kind of thing that makes some people ill, and unlike the tap reaction it
+ * never stops. The reaction stays — it is feedback for something the user just did, which is the
+ * exception this media query is meant to allow.
+ */
+/*
+ * The wander never stops, and endless motion is the kind of thing that makes some people ill. The
+ * POP and the SHAKE stay — those are feedback for something the user just did, which is the
+ * exception this query is meant to allow.
+ *
+ * Stopping the roam leaves the animals parked wherever their rest box put them, which is still a
+ * perfectly playable screen: the question is asked, four animals are visible, one is right.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .zoo-roam-x,
+  .zoo-roam-y {
+    animation: none;
+  }
+}
+
+/*
+ * The wrong animal, when touched: a quick shudder and nothing else.
+ *
+ * Deliberately NOT the pop. The animal stays, nothing is scored, and the shake is only there so
+ * the child can see WHICH one they touched — 'not that one' teaches more than a general 'no', the
+ * same reason the wrong-answer X in the games lands on the hole that was chosen.
+ */
+.zoo-shake {
+  animation: zoo-shake 520ms ease-in-out;
+}
+
+@keyframes zoo-shake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  15% { transform: translateX(-9px) rotate(-4deg); }
+  35% { transform: translateX(8px) rotate(4deg); }
+  55% { transform: translateX(-6px) rotate(-3deg); }
+  75% { transform: translateX(4px) rotate(2deg); }
+}
+
+/* The spoken question, echoed on screen for the adult. Pops when the question changes. */
+.zoo-ask {
+  animation: zoo-ask 420ms cubic-bezier(0.22, 1.4, 0.4, 1);
+}
+
+@keyframes zoo-ask {
+  0% { opacity: 0; transform: translateY(-8px) scale(0.94); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/*
+ * THE POP. Squash, swell, gone.
+ *
+ * `forwards`, unlike every other reaction animation in this app, because the animal must STAY
+ * invisible for the ~40ms between the pop finishing and React swapping the slot. Without it the
+ * artwork snaps back to full opacity for a frame or two, which reads as a flicker.
+ *
+ * The tiny squash at 12% is what sells it: a balloon compresses before it bursts, and without the
+ * anticipation the swell looks like a scale transition rather than a pop.
+ */
+.zoo-pop {
+  animation: zoo-pop 420ms cubic-bezier(0.3, 1.5, 0.5, 1) forwards;
+}
+
+@keyframes zoo-pop {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  12% {
+    transform: scale(0.88, 1.06);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(1.45) rotate(4deg);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7) rotate(6deg);
+    opacity: 0;
+  }
+}
+
+/*
+ * The burst that goes with it, reusing the `spark-out` keyframes the correct-answer sparkles
+ * already use — same look, no second implementation. Positioned at the animal's middle and
+ * travelling outward by a fraction of its size, so a big animal bursts bigger.
+ */
+.zoo-burst {
+  position: absolute;
+  left: 50%;
+  pointer-events: none;
+}
+
+.zoo-burst span {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  margin-top: -10px;
+  border-radius: 5px;
+  background: #ffd34e;
+  border: 3px solid #2a2438;
+  box-sizing: border-box;
+  animation: spark-out 460ms ease-out forwards;
 }
 
 
@@ -384,7 +625,7 @@ body {
  * Shallower and pulsier than the roar version: this is laughing along with the clapping,
  * not a single held bellow.
  */
-.critter-jaw {
+.critter .critter-jaw {
   animation: critter-jaw 1500ms ease-out forwards;
   transform-box: view-box;
   /* Inherit so the dev gallery can freeze every part of the animation from one place. */
@@ -424,8 +665,8 @@ body {
  * The clap. Both arms swing toward the head's centre line and meet, three times, on the
  * same beats as the bounce and the laugh. Mirrored values, one keyframe set each.
  */
-.critter-arm-l,
-.critter-arm-r {
+.critter .critter-arm-l,
+.critter .critter-arm-r {
   animation-duration: 1500ms;
   animation-timing-function: ease-in-out;
   animation-fill-mode: forwards;
@@ -434,11 +675,11 @@ body {
   animation-play-state: inherit;
 }
 
-.critter-arm-l {
+.critter .critter-arm-l {
   animation-name: critter-clap-l;
 }
 
-.critter-arm-r {
+.critter .critter-arm-r {
   animation-name: critter-clap-r;
 }
 

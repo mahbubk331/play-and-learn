@@ -1,6 +1,8 @@
+import { ANIMALS, type AnimalId } from "../animals";
+import { zooArt } from "../critters/zoo";
 import { HUES } from "../hues";
 import type { Mode } from "../levels";
-import { SHAPES, STAGE } from "../stage";
+import { MENU, SHAPES, STAGE } from "../stage";
 import { maxStars, TOTAL_STARS, TRACKS, type Track } from "../tracks";
 import type { Progress } from "../native";
 import { colors, fonts } from "../theme";
@@ -32,26 +34,37 @@ import { Star } from "./Hud";
  */
 
 /**
- * Two columns of two, centred: 420*2 + 34 = 874 wide in a 1000 stage, so 63 either side.
- * Bottom row ends at 454 + 232 = 686, leaving the same 34 under it as between the rows.
+ * Two columns of two for the games, then a full-width banner for the animal game.
+ *
+ * 420*2 + 34 = 874 wide in a 1000 stage, so 63 either side. Three rows of 150 with 24 between
+ * them runs 188..686, leaving 34 under the last — the same margin the two-row version had, which
+ * is what made room for a fifth card without shrinking the stage's breathing space.
+ *
+ * The cards got shorter (232 -> 150) rather than narrower, because the text inside is a title, a
+ * one-line blurb and a status line, and losing width would have wrapped all three.
  */
-const CARD = {
-  width: 420,
-  height: 232,
-  gap: 34,
-  left: 63,
-  top: 188,
-};
+/*
+ * The grid comes from stage.ts now, because it changes shape with the stage: two columns of
+ * 420 across the landscape stage, one column of 480 down the portrait one. Two 420s do not fit
+ * across 640, and narrowing them to fit wraps the title, the blurb AND the status line.
+ */
 
 /**
- * What each track looks like at a glance, in a 120x120 box.
+ * What each track looks like at a glance.
  *
  * Drawn from the same data the board draws from — `SHAPES` polygons through `placedPoints`, the
  * real `HUES` values — so a card cannot end up advertising a game the track does not contain.
  * The alternative was four hand-drawn icons, which is four more things to keep in step.
+ *
+ * EVERY COORDINATE IS A FRACTION OF `box`. They were absolute, tuned for the 120px icon the
+ * two-row picker had room for; the moment the cards got shorter to fit a fifth, a 104px box drew
+ * the same 120px artwork and the quadrants stopped being quadrants.
  */
-const TrackIcon = ({ id }: { id: Mode }) => {
-  const box = 120;
+const TrackIcon = ({ id, box = 104 }: { id: Mode; box?: number }) => {
+  /** Quadrant centres, for the two icons made of four things. */
+  const near = box * 0.3;
+  const far = box * 0.7;
+  const stroke = Math.max(4, box * 0.042);
 
   if (id === "color") {
     // Red, yellow, blue, green: four of the seven, and the four a child meets first.
@@ -63,12 +76,12 @@ const TrackIcon = ({ id }: { id: Mode }) => {
         {picks.map((hue, i) => (
           <circle
             key={hue.id}
-            cx={i % 2 === 0 ? 36 : 84}
-            cy={i < 2 ? 36 : 84}
-            r={25}
+            cx={i % 2 === 0 ? near : far}
+            cy={i < 2 ? near : far}
+            r={box * 0.208}
             fill={hue.fill}
             stroke={hue.deep}
-            strokeWidth={5}
+            strokeWidth={stroke}
           />
         ))}
       </svg>
@@ -83,14 +96,14 @@ const TrackIcon = ({ id }: { id: Mode }) => {
             key={shape.id}
             points={placedPoints(
               shape.points,
-              i % 2 === 0 ? 36 : 84,
-              i < 2 ? 36 : 84,
+              i % 2 === 0 ? near : far,
+              i < 2 ? near : far,
               1,
-              52,
+              box * 0.433,
             )}
             fill={colors.block}
             stroke={colors.ink}
-            strokeWidth={5}
+            strokeWidth={stroke}
             strokeLinejoin="round"
           />
         ))}
@@ -111,10 +124,10 @@ const TrackIcon = ({ id }: { id: Mode }) => {
         style={{
           fontFamily: fonts.display,
           fontWeight: 800,
-          fontSize: 54,
+          fontSize: box * 0.45,
           fill: colors.block,
           stroke: colors.ink,
-          strokeWidth: 9,
+          strokeWidth: box * 0.075,
           strokeLinejoin: "round",
         }}
       >
@@ -152,11 +165,11 @@ const TrackStatus = ({
         gap: 10,
         fontFamily: fonts.sans,
         fontWeight: 600,
-        fontSize: 24,
+        fontSize: 21,
         color: colors.text,
       }}
     >
-      <Star filled={played} size={26} />
+      <Star filled={played} size={23} />
       <span>
         {stars} / {total}
       </span>
@@ -171,12 +184,46 @@ const TrackStatus = ({
   );
 };
 
+/**
+ * A row of animal heads for the park's card.
+ *
+ * The real artwork at a small size, not a drawing of it, for the same reason the four game icons
+ * are the real polygons and hues: a card that advertises something the screen does not contain
+ * is a card that will eventually be wrong. Four of the twelve, and the four a child names first.
+ */
+const AnimalStrip = ({ height = MENU.stripHeight }: { height?: number }) => {
+  const ids: AnimalId[] = (["lion", "cow", "duck", "dog"] as AnimalId[]).slice(
+    0,
+    MENU.stripCount,
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 2 }}>
+      {ids.map((id) => {
+        const Art = zooArt(id);
+        return (
+          <svg
+            key={id}
+            viewBox="0 0 200 170"
+            height={height}
+            style={{ display: "block", flex: "none" }}
+          >
+            <Art />
+          </svg>
+        );
+      })}
+    </div>
+  );
+};
+
 export const Menu = ({
   progress,
   onPick,
+  /** The animal game is not a track, so it gets its own way in. See animals.ts. */
+  onAnimals,
 }: {
   progress: Progress;
   onPick: (id: Mode) => void;
+  onAnimals: () => void;
 }) => {
   const banked = TRACKS.reduce(
     (sum, t) => sum + (progress[t.id]?.stars ?? 0),
@@ -190,7 +237,7 @@ export const Menu = ({
           style={{
             fontFamily: fonts.display,
             fontWeight: 800,
-            fontSize: 68,
+            fontSize: MENU.titleSize,
             lineHeight: 1,
             color: colors.spark,
             WebkitTextStroke: `9px ${colors.ink}`,
@@ -209,7 +256,7 @@ export const Menu = ({
             gap: 10,
             fontFamily: fonts.display,
             fontWeight: 800,
-            fontSize: 40,
+            fontSize: MENU.scoreSize,
             color: colors.ink,
           }}
         >
@@ -227,10 +274,13 @@ export const Menu = ({
           // positioned in the same logical units and a flex container here would be the one
           // place whose geometry does not come from the same numbers.
           style={{
-            left: CARD.left + (i % 2) * (CARD.width + CARD.gap),
-            top: CARD.top + (i < 2 ? 0 : 1) * (CARD.height + CARD.gap),
-            width: CARD.width,
-            height: CARD.height,
+            left:
+              MENU.card.left + (i % MENU.cols) * (MENU.card.width + MENU.card.gap),
+            top:
+              MENU.card.top +
+              Math.floor(i / MENU.cols) * (MENU.card.height + MENU.card.gap),
+            width: MENU.card.width,
+            height: MENU.card.height,
           }}
           onClick={() => onPick(track.id)}
         >
@@ -241,7 +291,7 @@ export const Menu = ({
               style={{
                 fontFamily: fonts.display,
                 fontWeight: 800,
-                fontSize: 46,
+                fontSize: 38,
                 lineHeight: 1,
                 color: colors.ink,
               }}
@@ -253,8 +303,8 @@ export const Menu = ({
               style={{
                 fontFamily: fonts.sans,
                 fontWeight: 500,
-                fontSize: 23,
-                lineHeight: 1.2,
+                fontSize: 20,
+                lineHeight: 1.15,
                 color: colors.text,
                 opacity: 0.75,
               }}
@@ -266,6 +316,65 @@ export const Menu = ({
           </div>
         </button>
       ))}
+
+      {/*
+        The animal game. Last, full width, and shaped unlike the four above it — see the note on
+        .menu-card-wide. No star count, because there is nothing to score: the status line says
+        what it is instead.
+      */}
+      <button
+        type="button"
+        className="menu-card menu-card-wide"
+        style={{
+          left: MENU.card.left,
+          top: MENU.wideTop,
+          width: MENU.wideWidth,
+          height: MENU.card.height,
+        }}
+        onClick={onAnimals}
+      >
+        <AnimalStrip />
+
+        <div className="menu-card-text">
+          <div
+            style={{
+              fontFamily: fonts.display,
+              fontWeight: 800,
+              fontSize: 38,
+              lineHeight: 1,
+              color: colors.ink,
+            }}
+          >
+            Animals
+          </div>
+
+          <div
+            style={{
+              fontFamily: fonts.sans,
+              fontWeight: 500,
+              fontSize: 20,
+              lineHeight: 1.15,
+              color: colors.text,
+              opacity: 0.75,
+            }}
+          >
+            Touch an animal to hear it
+          </div>
+
+          <div
+            style={{
+              fontFamily: fonts.sans,
+              fontWeight: 600,
+              fontSize: 21,
+              color: colors.text,
+              opacity: 0.5,
+            }}
+          >
+            {ANIMALS.length} animals &middot; just for fun
+          </div>
+        </div>
+      </button>
+
     </div>
   );
 };

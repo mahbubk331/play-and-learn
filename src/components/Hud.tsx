@@ -1,4 +1,5 @@
 import { MAX_WRONG } from "../levels";
+import { HUD } from "../stage";
 import { colors, fonts } from "../theme";
 
 /**
@@ -113,19 +114,13 @@ export const Hud = ({
   rounds: number;
   nonce: number;
   onMenu: () => void;
-}) => (
-  <div
-    style={{
-      position: "absolute",
-      left: 26,
-      right: 26,
-      top: 22,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      pointerEvents: "none",
-    }}
-  >
+}) => {
+  /*
+   * The three groups, named rather than inlined, because the portrait bar puts them in a
+   * different arrangement rather than a smaller one. Squeezing all three onto one 640-wide
+   * line collides them: the round stars alone run to nine on the numbers track.
+   */
+  const identity = (
     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
       <MenuButton onPress={onMenu} />
 
@@ -153,22 +148,33 @@ export const Hud = ({
         </div>
       </div>
     </div>
+  );
 
-    {/* Progress through this level, one star per round. Doubles as an answer to
-        "how much longer" without a timer, which is the only acceptable way to
-        answer it here. */}
-    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+  /* Progress through this level, one star per round. Doubles as an answer to
+     "how much longer" without a timer, which is the only acceptable way to
+     answer it here. */
+  const progress = (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 3,
+      }}
+    >
       {Array.from({ length: rounds }, (_, i) => (
         <span
           key={i}
           className={i === round - 1 ? "star-pop" : undefined}
           style={{ display: "block" }}
         >
-          <Star filled={i < round} size={30} />
+          <Star filled={i < round} size={HUD.starSize} />
         </span>
       ))}
     </div>
+  );
 
+  const tally = (
     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {Array.from({ length: MAX_WRONG }, (_, i) => (
@@ -193,5 +199,45 @@ export const Hud = ({
         {stars}
       </span>
     </div>
-  </div>
-);
+  );
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 26,
+        right: 26,
+        top: 22,
+        display: "flex",
+        flexDirection: HUD.stack ? "column" : "row",
+        alignItems: HUD.stack ? "stretch" : "center",
+        justifyContent: "space-between",
+        gap: HUD.stack ? 12 : 0,
+        pointerEvents: "none",
+      }}
+    >
+      {HUD.stack ? (
+        <>
+          {/* Line one carries what the adult reads, line two the row that grows. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            {identity}
+            {tally}
+          </div>
+          {progress}
+        </>
+      ) : (
+        <>
+          {identity}
+          {progress}
+          {tally}
+        </>
+      )}
+    </div>
+  );
+};

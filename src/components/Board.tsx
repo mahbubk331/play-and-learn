@@ -2,10 +2,11 @@ import { colors, fonts } from "../theme";
 import {
   BOARD,
   HOLE_SCALE,
-  HOLE_Y,
   SHAPE_PX,
   STAGE,
   holeCenterX,
+  holeCenterY,
+  holeLabelY,
   pointsAttr,
   scaledPoints,
 } from "../stage";
@@ -169,7 +170,7 @@ export const Board = ({
             key={i}
             token={token}
             cx={holeCenterX(i)}
-            cy={HOLE_Y}
+            cy={holeCenterY(i)}
             scale={HOLE_SCALE}
             fill="#000"
           />
@@ -192,7 +193,7 @@ export const Board = ({
       <HoleShape
         token={arrangement[seatedIndex]}
         cx={holeCenterX(seatedIndex)}
-        cy={HOLE_Y}
+        cy={holeCenterY(seatedIndex)}
         scale={1}
         fill={tokenHue(arrangement[seatedIndex])?.fill ?? colors.block}
         stroke={colors.ink}
@@ -238,7 +239,7 @@ export const Board = ({
           key={`rim-${i}`}
           token={token}
           cx={holeCenterX(i)}
-          cy={HOLE_Y}
+          cy={holeCenterY(i)}
           scale={HOLE_SCALE}
           fill="none"
           stroke={hue ? hue.fill : colors.ink}
@@ -257,7 +258,7 @@ export const Board = ({
           key={`ring-${i}`}
           token={token}
           cx={holeCenterX(i)}
-          cy={HOLE_Y}
+          cy={holeCenterY(i)}
           scale={HOLE_SCALE * 1.135}
           fill="none"
           stroke={hue.deep}
@@ -270,7 +271,7 @@ export const Board = ({
       <HoleShape
         token={arrangement[hoverIndex]}
         cx={holeCenterX(hoverIndex)}
-        cy={HOLE_Y}
+        cy={holeCenterY(hoverIndex)}
         scale={HOLE_SCALE * 0.94}
         fill="none"
         stroke={colors.spark}
@@ -290,7 +291,7 @@ export const Board = ({
         <text
           key={`label-${i}`}
           x={holeCenterX(i)}
-          y={BOARD.top + BOARD.height - 22}
+          y={holeLabelY(i)}
           textAnchor="middle"
           style={{
             fontFamily: fonts.display,

@@ -15,6 +15,10 @@ video. A block appears, its shape is spoken aloud, and you drag it to the hole i
 levels, their own level numbering and their own saved progress. Eighteen levels in total, and
 54 stars.
 
+**Plus an animal game**: four animals roam the screen and the narrator asks for one — "Can you
+touch the cow?" Find it and you get praised, hear the cow, and are invited to moo back. Sixteen
+animals, no levels, no score, nothing to lose.
+
 ## Commands
 
 ```bash
@@ -26,14 +30,19 @@ bun run preview        # serve the build
 bun run lint           # tsc --noEmit
 ```
 
-Regenerating audio. The letter and praise clips are generated **from this repo**; everything
-else still lives in the Remotion project:
+Regenerating audio. The letter, praise and animal clips are generated **from this repo**;
+everything else still lives in the Remotion project:
 
 ```bash
-# letters + praise. Needs two packages that are deliberately not dependencies:
+# letters + praise + animals. Needs two packages that are deliberately not dependencies:
 bun add -d msedge-tts playwright-core
-node scripts/gen-voice.mjs           # write public/audio/game-l*.wav, game-p*.wav
-node scripts/gen-voice.mjs --check   # verify pronunciation, write nothing
+node scripts/gen-voice.mjs           # write game-l*, game-p*, game-a* into public/audio
+node scripts/gen-voice.mjs --check   # verify pronunciation and lengths, write nothing
+
+# then re-apply the five real animal recordings, which overwrite five of the game-a* clips.
+# ORDER MATTERS: gen-voice.mjs writes a voice clip for all sixteen animals, so running it
+# afterwards would silently replace the real recordings with imitations again.
+node scripts/fetch-animal-sounds.mjs # tiger, cat, dog, duck, horse + rewrite ATTRIBUTION.md
 
 cd ../remotion-app
 python scripts/gen-kids-sfx.py       # clap, bonk, wrong tone, T-rex roar
@@ -44,9 +53,9 @@ python scripts/export-game-audio.py  # trim + copy into this project
 
 ## The four games
 
-The home screen is a picker with four cards ([Menu.tsx](src/components/Menu.tsx)). Tap one and
-you are in that track, at the level it was last left on; the grid button in the HUD comes back
-here.
+The home screen is a picker: four game cards plus the animal game ([Menu.tsx](src/components/Menu.tsx)).
+Tap a game and you are in that track, at the level it was last left on; the grid button in the
+HUD comes back here.
 
 **It used to be one thirteen-level ladder** — colours, then shapes, then numbers, in the order a
 child acquires the skills. That ordering was right about the skills and wrong about the child in
@@ -159,6 +168,120 @@ about which letter it is that has nothing to do with reading it.
 
 **The letter track has no recorded voice yet.** See [Sound](#sound) — it is the one real gap in
 the feature.
+
+## The animal game
+
+**The narrator asks for an animal; finding it is the task.** Four animals roam the screen
+([Animals.tsx](src/components/Animals.tsx)):
+
+1. "Can you touch the cow?"
+2. the child touches the cow → **"Good job!"**
+3. the cow's own noise
+4. **"Can you make the sound the cow makes? Moo, moo!"**
+
+**Step 4 is the actual point of the section.** Everything before it teaches the NAME; that one asks
+the child to make a noise out loud, and it is the only thing anywhere in this app that asks them to
+produce rather than recognise. Nothing can verify they did it, and nothing tries to — the
+invitation is the whole feature.
+
+**It still has no score, no levels and no fail state**, which is why it is still not a `Track`. A
+wrong touch shakes the animal it landed on, gets a kind line ("Have another look!"), and asks the
+question again. Nothing is spent. At this age a wrong answer that costs something stops the
+guessing, and guessing is the activity — so the wrong animal is not even removed.
+
+Two smaller decisions in the same spirit:
+
+- **The question is on screen as well as spoken.** The child cannot read it; the adult can, and
+  otherwise has no idea what was asked and cannot help.
+- **An unanswered question is asked again after ~13 seconds.** That is not nagging, it is the
+  opposite: a two-year-old who has forgotten the question has no way to get it back, and four
+  animals with no task is just noise. Any touch resets the timer, so an engaged child never hears
+  it.
+
+### How the game is built
+
+**SIXTEEN ANIMALS, FOUR ON SCREEN.** Bee, owl, elephant and bear were added for this version,
+bringing the cast to sixteen. Four at once makes finding one a
+real search while staying scannable, and a duplicate is never spawned because that would make the
+question ambiguous. Neither is the animal that was just found: it is the one candidate *not* on
+screen, so without excluding it a popped dinosaur could be replaced by a new dinosaur fading in
+next to where it burst, which reads as the pop having failed.
+
+**THREE NESTED ANIMATION LAYERS, and they have to be three separate elements**, because all three
+animate `transform` and CSS animations on the same property do not compose — the last declared
+simply wins, so one element would do one of these and silently drop the other two:
+
+| element | does |
+|---|---|
+| `.zoo-roam-x` | horizontal wander. **Also the button**, so the hit area travels with the animal |
+| `.zoo-roam-y` | vertical wander, on a **different** period |
+| `.zoo-art` | the pop when found, or the shake when wrong |
+
+The two sweeps having different periods is the whole movement mechanism: they drift in and out of
+phase, so the path traced is a slowly-precessing loop rather than a line. It is a Lissajous figure,
+and it costs **no JavaScript at all** — no rAF loop, no position state, nothing running between
+taps.
+
+**Each animal roams inside one of four cells, and this was wrong first.** Letting all four roam the
+whole field failed in both directions at once: rest positions could only vary over the width the
+sweep did not use, so all four started in a narrow band — and with random phases they regularly
+bunched into one corner, three deep, with most of the screen empty and their labels unreadable. A
+tap into that pile is a coin toss, which is not acceptable when the task is "touch the cow". Cells
+are disjoint and every animal's box always fits inside its own, so **overlap is impossible by
+construction rather than by luck**; a new animal inherits the cell of the one it replaced. Verified,
+not assumed: the checks sample every hit area repeatedly *while they move* and assert both zero
+overlaps and zero escapes off the stage.
+
+**Narration is chained off real clip lengths, not guesses.** `AudioEngine.duration()` exists for
+this. Timings were hard-coded first and were immediately wrong — "Can you touch the crocodile?" is
+half a second longer than "Can you touch the cow?", so one fixed delay either talked over itself or
+left dead air. The durations are sitting in the decoded buffers, so nothing has to be estimated.
+
+**The state updater had to be made pure.** The first version computed the next round inside
+`setRoamers(current => ...)` and called `ask`, `setTarget` and `place` from in there. React is
+entitled to run an updater twice, and does — the symptom was the new question being spoken twice
+every round and a wasted spawn key each time. The work now happens outside the updater, reading the
+roster from a mirror ref.
+
+**`prefers-reduced-motion` stops the roaming** and leaves the animals parked wherever their rest
+box put them, which is still a perfectly playable screen: the question is asked, four animals are
+visible, one is right. The pop and the shake stay, because those are feedback for something the
+user just did.
+
+An earlier version of this screen was a static grid of all twelve in bordered cards. It got two
+things wrong that were invisible in code and obvious on screen:
+
+- **The card could not be `overflow: hidden`.** The artwork is taller than the space left under
+  the label, so every animal lost its legs, and the tap animation was clipped too.
+- **Three animals had their signature feature hidden inside their own skull** — see below.
+
+### The animals are the same cast, drawn once
+
+Five of the twelve — cow, lion, tiger, monkey, dinosaur — are the artwork already drawn for the
+animals that applaud a correct answer, reused rather than redrawn, which is most of why twelve
+was affordable. The other seven are in [zoo.tsx](src/critters/zoo.tsx), built from the same
+`kit.tsx` primitives so the park and the reward beat share one cast rather than having two.
+
+`ZOO_PARTS` is typed `Record<AnimalId, Parts>`, which is what turns "someone added an animal and
+forgot to draw it" into a compile error rather than a tile that throws when a child touches it.
+That is also why the five reused entries are listed one by one instead of spread in from
+`DISTINCT` — a spread of `Record<string, Parts>` satisfies any key check trivially, so it would
+have quietly defeated the exhaustiveness it appears to provide. `ANIMALS` needs `as const` for
+the same reason: without it every id is `string` and the check silently passes.
+
+The reward pool is deliberately **not** widened in return. It stays at the original five, because
+those have been checked against the clap-and-laugh animation and the seven new ones have not.
+
+Adding these also meant scoping `.critter-jaw` and `.critter-arm-*` to `.critter` in the CSS.
+Those animations were global and unconditional, so any artwork mounted anywhere would clap once
+on mount — every animal applauding as the screen opened. The game and the dev gallery both wrap
+in `.critter`, so nothing else changed.
+
+Three of the seven had to be redrawn once after looking at them: the chicken's comb, the goat's
+horns and the horse's ears were all authored inside the skull's own outline and were invisible.
+Those three features are the entire silhouette cue for those three animals — a white animal with
+floppy ears and no horns is a sheep — which is a good argument for rendering the thing before
+believing the geometry.
 
 ### One game, not four
 
@@ -405,7 +528,7 @@ Fonts come from the Google Fonts CDN, linked in `index.html`.
 
 ## Sound
 
-Seventy-two clips in `public/audio/`, all generated rather than sourced — none of them bought,
+A hundred and twenty-six clips in `public/audio/`, all generated rather than sourced — none of them bought,
 and none of them from a sample library:
 
 | clip | what |
@@ -422,6 +545,10 @@ and none of them from a sample library:
 | `game-nextlevel.wav` | "Well done! Next level" |
 | `game-lA.wav` ... `game-lZ.wav` | the twenty-six letter names, spoken |
 | `game-pgoodjob.wav` ... | the eight praise lines, spoken |
+| `game-alion.wav` ... | each animal's own noise. **Five contain a real recording**, nine are the voice — see below |
+| `game-askcow.wav` ... | "Can you touch the cow?", one per animal |
+| `game-sndcow.wav` ... | "Can you make the sound the cow makes? **Moooo! Moooo!**", one per animal |
+| `game-nudge*.wav` | the three gentle lines for a wrong touch |
 
 ### Praise on a correct answer varies
 
@@ -446,6 +573,75 @@ underneath it; the delay puts the words in the tail of the clap. That was true o
 about 900ms, comfortably inside `CORRECT_HOLD` (1.7s), so nothing is still talking when the next
 block arrives.
 
+### Five animals are real recordings; seven are a voice
+
+An honest split, and worth stating plainly rather than glossing.
+
+| | animals | what you hear |
+|---|---|---|
+| **real recording** | tiger, cat, dog, duck, horse | an actual field recording, then the name spoken |
+| **voice** | lion, cow, goat, chicken, monkey, crocodile, dinosaur | the neural voice saying "Moo! Cow." |
+
+The whole audio set was originally generated rather than sourced, and real recordings were added
+on request. Getting to twelve was not possible: **Wikimedia Commons is the only source reachable
+with machine-readable licences, and it has a usable recording for five of them.** A dinosaur has
+no real sound at all.
+
+What the search actually turned up is worth recording, because none of it is obvious:
+
+- Commons' free-text search is hostile to this. "cow" returns a 1922 ragtime record and a diving
+  alarm called *Cow Fart*; "tiger" returns a European bison; "horse" returns cockatoos.
+- Worse, most keyword hits are **Lingua Libre** files — `LL-Q1860 (eng)-Someone-meow.wav` is a
+  volunteer pronouncing the *word* "meow" for a dictionary. They pass every keyword filter
+  perfectly and are *more* of a human imitation than the voice clips they were meant to replace.
+  Anything matching `LL-*`, `En-xx-*` or "pronunciation" is now excluded on sight.
+- Species sound categories (`Category:Dog sounds`) mostly do not exist.
+- **NC licences are excluded outright.** This ships in an app store, and non-commercial means
+  non-commercial.
+
+Two of the five are **CC BY-SA 3.0**, which means attribution and share-alike on those clips —
+see [ATTRIBUTION.md](ATTRIBUTION.md) and the licence table below. That is a real consequence of
+using third-party audio, and it is why the rest of the project generates everything.
+
+**Level-matching the two kinds together mattered more than expected.** Peak-normalising a field
+recording and appending the spoken name produced clips that were loud then quiet *inside
+themselves*, and about 4dB louder than the seven all-voice animals — so tapping the tiger and
+then the lion jumped in volume. They are matched on **RMS**, not peak, because that is what
+loudness tracks: a bark is far peakier than a spoken word, so equal peaks sound very unequal. The
+recording sits at 1.1x the name so the noise stays forward of the label. A final limiter scales
+(never clips) anything over 0.9 peak — the horse needed it. All twelve now sit between 0.083 and
+0.136 RMS.
+
+**The onomatopoeia needed prosody, and that was the worst of the robot problem.** Text-to-speech
+has no idea it is imitating an animal: left alone it reads "Moo, moo!" as a word, at conversational
+speed, in the same breath as the question. Two things fix it, and both were needed:
+
+- **The spelling** — `"Moooo! Moooo!"`, not `"Moo, moo!"`. Stretched vowels are what stop the voice
+  treating it as a dictionary word, and they are how children's books spell it anyway.
+- **`<prosody rate="-24%" pitch="+18%">` around the noise only**, so the question wrapped around it
+  stays conversational. This is why the generator sends raw SSML rather than plain text.
+
+**`<prosody>` is the only SSML this endpoint accepts.** `<break>`, `<emphasis>` and the expressive
+`<mstts:express-as>` styles (cheerful, friendly) each close the websocket mid-synthesis — verified,
+and a shame, because an expressive style is exactly the right tool for this. So the levers are the
+voice, the prosody and the spelling, and nothing else.
+
+**Sentences are also trimmed less tightly than words**: 70ms/200ms of padding against 20ms/60ms. A
+one-syllable letter wants a tight trim, because a cue that starts late reads as lag; a sentence has
+a soft onset and a decaying tail, and the tight trim clipped both, which was itself part of why the
+narration sounded abrupt.
+
+**One clip per animal, noise then name**, so the two can never arrive out of order.
+
+**A tap cuts off the previous tap** — `AudioEngine.playAlone`. A two-year-old with a twelve-tile
+grid taps far faster than 2s, and four animals talking at once is mush; mush teaches nothing, so
+the newest tap wins. That is the opposite of what the game cues do, where applause and praise fire
+together on purpose and overlapping playback is the reason this engine is Web Audio at all.
+
+The generator's length check started at 2.2s and flagged four clips that were simply that long
+("Cluck cluck! Chicken." is five syllables). It is 2.8s now: a check that fires on correct output
+trains you to ignore it.
+
 ### The letter and praise clips, and the synthesiser that used to stand in for them
 
 The letter track and the varied praise came after this repo was split off from the Remotion
@@ -466,9 +662,18 @@ provenance, so the letter track matches the rest of the game rather than sitting
 the same redistribution caveat applies. `speechSynthesis` is gone from the app entirely; there is
 no fallback path left.
 
-**The voice is `en-GB-LibbyNeural`**, chosen by ear from a seven-voice audition spanning child and
-adult, US and GB. Being British is not incidental: it gives "zed" and "aitch" for Z and H without
-either being hard-coded.
+**The voice is `en-US-EmmaNeural`, chosen by ear twice.**
+
+The first audition was over single **words** — letters and praise — and picked
+`en-GB-LibbyNeural`. The second was over **sentences**, once the animal game needed narration, and
+Libby lost. It is a "General" tier voice and it reads a sentence flatly; Emma is one of the newest
+generation (Microsoft's "Conversation" tier) and paces one far better — it renders the same line in
+2.9s where Libby takes 3.8s. That pacing difference is most of what "sounds like a robot" actually
+was.
+
+**The switch has a cost**: Emma is American, so the letters now say "zee" rather than "zed". If the
+British accent matters more than the narration does, `en-GB-SoniaNeural` was the best GB
+alternative and `VOICE` in [gen-voice.mjs](scripts/gen-voice.mjs) is the one line to change.
 
 Three things about generating them that were not obvious:
 
@@ -487,11 +692,9 @@ Three things about generating them that were not obvious:
   lag. The letters come out 0.33–0.75s, the praise lines 0.59–0.86s, against ~0.68s for the
   existing shape names.
 
-**On pronunciation, which is the part worth measuring.** The bare character is the right input
-for 24 of the 26 letters. The two exceptions are the ones whose bare character is also a common
-English word, and *which* of the two needs help depends on the accent — established by
-cross-correlating the two renderings, since identical input phonemes produce byte-identical
-audio from this engine (a "B" vs "B" control gives exactly 1.00):
+**On pronunciation, and on a check that stopped working.** The bare character is the right input
+for almost every letter; the exceptions are the ones whose bare character is also a common English
+word, and *which* of the two needs help depends on the accent:
 
 | | bare `A` | bare `I` |
 |---|---|---|
@@ -499,13 +702,19 @@ audio from this engine (a "B" vs "B" control gives exactly 1.00):
 | **GB voices** | already correct (corr 1.00) | *not* "eye" (corr −0.07) — needs `"eye"` |
 
 Each is only wrong on one side of the Atlantic, so the one `{A: "ay", I: "eye"}` table is correct
-for any voice. `--check` re-runs that comparison for all 26 against an independent spelling of
-each letter name; a mismatch indicts whichever side is more doubtful, and the respelling is often
-the doubtful one — the first pass flagged G, N, U and W, and in every case the *respelling* was
-the error ("jee" not "gee", "double you" not "double-you"). **E and W matched no spelling tried**
-and are the two the automated check cannot vouch for; both were confirmed by listening instead.
-Their durations were the supporting evidence: W is 0.75s, the longest of the twenty-six, as
-"double-you" requires, and E is 0.33s, one long vowel.
+for either voice.
+
+`--check` cross-correlates each letter against an independent spelling of its name. **That check
+worked on Libby and does not work on Emma**, and the reason is worth recording: it rests on
+identical input phonemes producing byte-identical audio, which held for Libby (24 of 26 matched
+exactly, and a "B" vs "B" control gave 1.00) but does not hold for the newer model — Emma
+tokenises a bare letter differently from the spelled word, so 12 of 26 now "mismatch" without any
+of them being mispronounced. A check that fires on correct output is worse than no check.
+
+What is left is **duration plausibility**, which is weaker but still structural: the 26 letters run
+0.17-0.58s, and **W is by far the longest at 0.58s** — exactly what "double-you" needs against
+"ess" at 0.17s. That pattern holding across the whole alphabet is good evidence the letters are
+being read as names. It is not proof, and the letters want an ear under the new voice.
 
 The praise clip **id is the filename** (`game-pgoodjob.wav`), not an array index. Praise was
 keyed by index first, which meant reordering the list would have silently repointed every clip.
@@ -607,6 +816,25 @@ finger must never scroll, rubber-band, select text or pinch-zoom the board away.
 >                a full letters level makes zero of them
 > pronunciation  24 of 26 letters confirmed against an independent spelling
 >                producing byte-identical audio; "B" vs "B" control = 1.00
+>
+> animal game    5 picker cards; exactly 4 animals on screen, never a
+>                 duplicate; the question always names one that IS on screen
+> the question    spoken on entry and re-asked after a wrong touch, both
+>                 confirmed by buffer duration rather than by network request,
+>                 since every clip is decoded at boot
+> wrong touch     shakes the animal it landed on, plays a nudge, then asks
+>                 again - and the animal STAYS, nothing pops, nothing scored
+> correct touch   pops (1 .zoo-pop, 8 burst particles) then plays three clips
+>                 in order: praise, the animal's own noise, and the 3.8s
+>                 "make the sound" invitation
+> next round      the found animal is gone, a new one has arrived, the count
+>                 is back to 4 and a new question names one of them
+> rapid taps      6 taps in ~1s still leave exactly 4, with no duplicates
+> roaming         hit areas sampled repeatedly WHILE MOVING: zero overlaps and
+>                 zero escapes off the stage. Cells are what guarantee this
+> all 14 drawn    every animal surfaced over repeated reloads and draws 20+
+>                 SVG nodes - which is what caught the three whose signature
+>                 feature was hidden behind their own skull
 > ```
 >
 > The board reader used for that is token-kind agnostic — glyph holes by their text, shapes by
@@ -670,14 +898,51 @@ check compares durations rather than names: several clips are the same length ("
   keyframes and Web Audio are a genuine rewrite. That route also removes the Mac requirement
   entirely, since EAS Build compiles in the cloud and Expo Go tests on a real device from
   Windows.
-- **The letters are an adult voice; the "Hooray!" is a child's.** All 34 new clips are
-  `en-GB-LibbyNeural`. Signed off by ear, so this is a decision rather than an oversight — but
-  if that inconsistency ever starts to grate, Ana (`en-US-AnaNeural`) and Maisie
-  (`en-GB-MaisieNeural`) are Microsoft's child voices and swapping is one line in
-  `scripts/gen-voice.mjs` plus a re-run.
+- **The narrator is an adult voice; the "Hooray!" is a child's.** Everything generated here is
+  `en-US-EmmaNeural`. If that inconsistency ever starts to grate, Ana (`en-US-AnaNeural`) and
+  Maisie (`en-GB-MaisieNeural`) are Microsoft's child voices — but both are "General" tier and
+  would bring back the flat sentences Emma was chosen to fix.
 - **`scripts/gen-voice.mjs` needs two packages that are not in `package.json`** (`msedge-tts`,
   `playwright-core`). Deliberate — the clips are committed and the script runs approximately
   never, so neither belongs in the app's dependency tree. It prints what to install.
+- **Only five of the sixteen animals are real recordings.** Lion, cow, goat, chicken, monkey,
+  crocodile, dinosaur, bee, owl, elephant and bear are still the voice, because Commons has
+  nothing usable for them — see
+  [Sound](#five-animals-are-real-recordings-seven-are-a-voice). A Freesound API key (free) would
+  cover the rest as CC0 and is the obvious way to close this.
+- **The park now mixes real recordings with a voice imitation**, which is a deliberate compromise
+  and audibly inconsistent. Uniformly one or the other would be better.
+- **Two animal clips are CC BY-SA 3.0**, so they are not MIT and they need the attribution in
+  [ATTRIBUTION.md](ATTRIBUTION.md) to ship with the app.
+- **Nothing checks whether the child actually made the sound.** Step 4 of the animal game is an
+  invitation into a void: the app asks for a moo and then moves on regardless. Listening for it is
+  possible (`getUserMedia` plus a loudness gate would do) and is a genuinely different feature,
+  with a privacy conversation attached.
+- **The eleven park-only drawings have not been checked against the clap animation.** They stay
+  out of the reward pool for the four games, because that pool needs verifying against
+  clap-and-laugh and a bee has no hands.
+- **The letters are now an American voice and want re-listening.** Switching to Emma changed them
+  from "zed" to "zee", replaced audio that had already been signed off, and cost the pronunciation
+  check most of its power (see Sound). Reverting just the letters to Libby is possible but would
+  put two voices in one app.
+- **The found sequence is ~9 seconds** — praise, the animal's noise, then a ~4s invitation, plus a
+  beat to answer in. That is a long time to hold a two-year-old between rounds, and it is the next
+  thing to measure on a real child.
+- **The park is three lanes and three slots, hard-coded.** More animals on screen at once means
+  more lanes, and the lane count is what guarantees hit areas never overlap — so it is not a
+  one-line change.
+- **A crossing animal is a moving target.** That is the mechanic, but it is untested on a real
+  touchscreen with a real two-year-old, and it is the thing most likely to need slowing down.
+  `CROSSING` in `Animals.tsx` is the one constant to change.
+- **`prefers-reduced-motion` cannot honour this screen properly.** It stops the vertical bob, but
+  the crossing *is* the feature and removing it would leave three animals sitting off-screen. A
+  reduced-motion variant would have to be a different screen — probably the static scatter this
+  replaced.
+- **The four per-animal tap motions are gone.** A tap pops now, so the hop, waddle, chomp and
+  bounce that were assigned per animal were superseded and removed rather than left as dead CSS.
+- **The seven new animals have not been checked against the clap-and-laugh animation**, which is
+  why the reward pool stayed at five. Widening it means verifying that a duck with no arms and a
+  beak instead of a jaw still reads correctly when it applauds.
 - **Only four holes.** That bounds a number level to four numerals per attempt, so the last
   number level shows four of twenty rather than covering the range — and the last letter level
   four of twenty-six. Widening it means shrinking `SHAPE_PX` or going to two rows.
@@ -706,7 +971,7 @@ check compares durations rather than names: several clips are the same length ("
 
 MIT — see [LICENSE](LICENSE).
 
-Two sets of bundled assets are deliberately carved out of it, because they are not mine to
+Several sets of bundled assets are deliberately carved out of it, because they are not mine to
 relicense:
 
 | | |
@@ -714,3 +979,4 @@ relicense:
 | `public/fonts/*.woff2` | Baloo 2 and Fredoka, **SIL OFL 1.1** ([notice](public/fonts/LICENSE.txt)). Redistributing the files requires that notice to travel with them. |
 | `public/audio/game-*`, `kids-*` | **Microsoft Edge neural voices**, generated via `msedge-tts`. Included for convenience so a clone runs, not as MIT-licensed. Regenerate them if the distinction matters to you. |
 | `public/audio/sfx-*` | Synthesized from scratch with numpy, no samples. MIT like the code. |
+| `game-atiger`, `acat`, `adog`, `aduck`, `ahorse` | Contain a **real field recording from Wikimedia Commons** — the only third-party audio in the project. Two are CC0, one public domain, and **two are CC BY-SA 3.0**, which requires attribution and makes those two clips share-alike rather than MIT. Every source, author and licence is listed in [ATTRIBUTION.md](ATTRIBUTION.md), regenerated from live Commons metadata by `scripts/fetch-animal-sounds.mjs`. |

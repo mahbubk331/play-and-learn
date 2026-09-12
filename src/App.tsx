@@ -11,6 +11,7 @@ import {
 } from "./components/Feedback";
 import { Hud } from "./components/Hud";
 import { Menu } from "./components/Menu";
+import { Animals } from "./components/Animals";
 import { Critter } from "./components/Critter";
 import { pickSpecies, type Species } from "./critters/registry";
 import {
@@ -26,11 +27,14 @@ import { MAX_WRONG, starsFor, type Mode } from "./levels";
 import { maxStars, TRACKS, trackById } from "./tracks";
 import {
   BLOCK_HOME,
-  HOLE_Y,
   SHAPE_PX,
   STAGE,
   holeAt,
   holeCenterX,
+  holeCenterY,
+  applyLayout,
+  currentOrientation,
+  orientationFor,
 } from "./stage";
 import {
   sameToken,
@@ -118,11 +122,15 @@ const Block = ({
 /**
  * Which screen is up.
  *
- * Two, and there is no router: "menu" is the picker, "playing" is a track. Everything about a
- * track — which levels, which tokens, what is spoken — comes from the selected Track, so this
- * is genuinely the whole navigation model.
+ * Three, and there is no router: "menu" is the picker, "playing" is one of the four level
+ * tracks, and "animals" is the park.
+ *
+ * The park is its own screen rather than a fifth track because it is not a game — no levels, no
+ * rounds, no score, no wrong answer (see animals.ts). Everything about a TRACK comes from the
+ * selected Track, so for the four games this really is the whole navigation model; the park just
+ * needs somewhere to be.
  */
-type Screen = "menu" | "playing";
+type Screen = "menu" | "playing" | "animals";
 
 export const App = () => {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -130,7 +138,16 @@ export const App = () => {
 
   const [scale, setScale] = useState(1);
 
+  /**
+   * Which stage is live, mirrored into state purely so a flip can re-key the tree.
+   *
+   * The geometry itself lives in stage.ts and is mutated there, not held here — see the note
+   * on the active layout. This value is the render trigger and the remount key, nothing more.
+   */
+  const [orientation, setOrientation] = useState(currentOrientation);
+
   const [screen, setScreen] = useState<Screen>("menu");
+
 
   /**
    * Which of the four games is being played, and how far into it.
@@ -241,6 +258,13 @@ export const App = () => {
    */
   useEffect(() => {
     const fit = () => {
+      /*
+       * Layout BEFORE scale, and in that order for a reason: the scale below is a ratio
+       * against whichever stage this picks, so reading STAGE first would size the new
+       * orientation against the old rectangle for one frame.
+       */
+      applyLayout(orientationFor(window.innerWidth, window.innerHeight));
+      setOrientation(currentOrientation());
       setScale(
         Math.min(
           window.innerWidth / STAGE.width,
@@ -341,7 +365,7 @@ export const App = () => {
     // The board is shuffled from the second level of every track, so a hole's position is not
     // its token.
     if (round && sameToken(arrangement[position], round.token)) {
-      setPos({ x: holeCenterX(position), y: HOLE_Y });
+      setPos({ x: holeCenterX(position), y: holeCenterY(position) });
       setSeatedPos(position);
       setOkNonce((n) => n + 1);
       // A different animal each time, never the same one twice running.
@@ -435,7 +459,18 @@ export const App = () => {
   };
 
   /**
-   * Back to the picker, from the HUD button or from finishing a track.
+   * Open the animal park.
+   *
+   * Nothing to resume and nothing to set up — it holds no progress, so this is the tap that
+   * unlocks audio and a screen change. That is the whole of what "not a game" buys.
+   */
+  const openAnimals = () => {
+    audio.current.unlock();
+    setScreen("animals");
+  };
+
+  /**
+   * Back to the picker, from the HUD button, the park, or finishing a track.
    *
    * Phase is reset on the way out. Leaving it as "correct" would leave a feedback timer to fire
    * against a screen that is no longer up, and the sparkles and the X would still be mounted
@@ -562,9 +597,20 @@ export const App = () => {
 
   return (
     <div className="viewport">
-      <div ref={stageRef} className="stage" style={stageStyle}>
+      <div key={orientation} ref={stageRef} className="stage" style={stageStyle}>
         {screen === "menu" ? (
-          <Menu progress={progress} onPick={pickTrack} />
+          <Menu
+            progress={progress}
+            onPick={pickTrack}
+            onAnimals={openAnimals}
+          />
+        ) : screen === "animals" ? (
+          <Animals
+            onMenu={goMenu}
+            onSound={(clip) => audio.current.playAlone(clip as SoundName)}
+            clipLength={(clip) => audio.current.duration(clip as SoundName)}
+          />
+
         ) : (
           <>
             <Hud
@@ -620,7 +666,7 @@ export const App = () => {
               <>
                 <Sparkles
                   x={holeCenterX(seatedPos)}
-                  y={HOLE_Y}
+                  y={holeCenterY(seatedPos)}
                   nonce={okNonce}
                 />
                 {species ? <Critter species={species} nonce={okNonce} /> : null}
@@ -631,7 +677,7 @@ export const App = () => {
             wrongPos !== null ? (
               <WrongMark
                 x={holeCenterX(wrongPos)}
-                y={HOLE_Y}
+                y={holeCenterY(wrongPos)}
                 nonce={wrongNonce}
               />
             ) : null}
@@ -660,6 +706,7 @@ export const App = () => {
           </>
         )}
       </div>
+
     </div>
   );
 };
