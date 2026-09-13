@@ -1230,9 +1230,15 @@ body {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   filter: drop-shadow(0 6px 0 rgba(42, 36, 56, 0.14));
+  /*
+   * Two animations, and the ORDER matters: both animate `transform`, and animations do not
+   * compose — the last one that applies wins. `bubble-in` has no delay and the drift has 380ms
+   * of it, which is exactly the in-animation's length, so the float takes over on the frame the
+   * entrance finishes rather than cancelling it from the start.
+   */
   animation:
     bubble-in 380ms cubic-bezier(0.22, 1.4, 0.4, 1) both,
-    bubble-float 5.5s ease-in-out 380ms infinite;
+    bubble-drift-1 11s ease-in-out 380ms infinite;
 }
 
 .bubble:disabled {
@@ -1245,30 +1251,35 @@ body {
 }
 
 /*
- * Each bubble drifts on its own clock.
+ * Each bubble wanders its own way, on its own clock.
  *
- * Without the staggered durations all five rise and fall in lockstep, which reads as the whole
- * screen breathing rather than as five separate bubbles floating. Prime-ish, unequal durations
- * mean the cluster does not visibly resynchronise while a round lasts.
+ * A PATH EACH, not one path at different speeds. With a single set of keyframes all five trace
+ * the same shape and the cluster reads as one object being moved about; five different circuits
+ * — two of them going round the opposite way — is what makes them read as five things drifting
+ * independently. The unequal durations then stop the group visibly resynchronising inside the
+ * ten-odd seconds a round lasts.
  *
  * `nth-of-type` and not `nth-child`: the bubbles are buttons among div siblings, so counting
- * children would number them by their position in the whole screen rather than among each
- * other.
+ * children would number them by their position in the whole screen rather than among each other.
  */
 .bubbles > button:nth-of-type(2) {
-  animation-duration: 380ms, 6.7s;
+  animation-name: bubble-in, bubble-drift-2;
+  animation-duration: 380ms, 13s;
 }
 
 .bubbles > button:nth-of-type(3) {
-  animation-duration: 380ms, 4.9s;
+  animation-name: bubble-in, bubble-drift-3;
+  animation-duration: 380ms, 9.5s;
 }
 
 .bubbles > button:nth-of-type(4) {
-  animation-duration: 380ms, 7.3s;
+  animation-name: bubble-in, bubble-drift-4;
+  animation-duration: 380ms, 12s;
 }
 
 .bubbles > button:nth-of-type(5) {
-  animation-duration: 380ms, 5.9s;
+  animation-name: bubble-in, bubble-drift-5;
+  animation-duration: 380ms, 10.5s;
 }
 
 /* Floating in at the start of a round. Slightly overshoots, like something buoyant settling. */
@@ -1284,24 +1295,108 @@ body {
 }
 
 /*
- * The drift. Small, and vertical more than horizontal.
+ * THE FIVE WANDER PATHS.
  *
- * 14 units of travel on a bubble roughly 180 across: enough to read as floating, small enough
- * that the target does not move out from under a finger already on its way down. That second
- * part is the constraint — a bubble that wanders 40 units is a bubble a two-year-old misses.
+ * Every offset is a fraction of `--drift`, which the component sets from `bubbleSpots` — where
+ * it is solved against the spot spacing so that two bubbles drifting straight at each other
+ * still cannot touch, and none can leave the stage. Hard-coded pixels here would be the same
+ * number in two places, and the one in CSS would not know the radius had changed.
+ *
+ * EVERY OFFSET VECTOR IS INSIDE THE UNIT CIRCLE — no keyframe exceeds a magnitude of 1.0, which
+ * is what makes a single scalar budget correct in all directions. That is the whole reason these
+ * can wander diagonally instead of only up and down: the bound is circular, not per-axis. Check
+ * the hypotenuse, not the components, when editing one.
+ *
+ * Four waypoints each and a return to the origin, so a circuit closes without a jump. Paths 1
+ * and 2 go round opposite ways, 3 and 5 cross themselves, 4 sweeps wide.
  */
-@keyframes bubble-float {
+@keyframes bubble-drift-1 {
   0% {
-    transform: translate(0, 0) scale(1);
+    transform: translate(0, 0);
   }
-  33% {
-    transform: translate(5px, -14px) scale(1.015);
+  25% {
+    transform: translate(calc(var(--drift) * 0.78), calc(var(--drift) * -0.58));
   }
-  66% {
-    transform: translate(-6px, 7px) scale(0.99);
+  50% {
+    transform: translate(calc(var(--drift) * 0.22), calc(var(--drift) * 0.95));
+  }
+  75% {
+    transform: translate(calc(var(--drift) * -0.85), calc(var(--drift) * 0.16));
   }
   100% {
-    transform: translate(0, 0) scale(1);
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes bubble-drift-2 {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(calc(var(--drift) * -0.8), calc(var(--drift) * -0.55));
+  }
+  50% {
+    transform: translate(calc(var(--drift) * 0.3), calc(var(--drift) * 0.92));
+  }
+  75% {
+    transform: translate(calc(var(--drift) * 0.88), calc(var(--drift) * -0.3));
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes bubble-drift-3 {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(calc(var(--drift) * 0.52), calc(var(--drift) * 0.83));
+  }
+  50% {
+    transform: translate(calc(var(--drift) * -0.9), calc(var(--drift) * 0.3));
+  }
+  75% {
+    transform: translate(calc(var(--drift) * 0.4), calc(var(--drift) * -0.88));
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes bubble-drift-4 {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(calc(var(--drift) * -0.62), calc(var(--drift) * 0.74));
+  }
+  50% {
+    transform: translate(calc(var(--drift) * 0.92), calc(var(--drift) * 0.34));
+  }
+  75% {
+    transform: translate(calc(var(--drift) * -0.28), calc(var(--drift) * -0.92));
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes bubble-drift-5 {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(calc(var(--drift) * 0.9), calc(var(--drift) * 0.32));
+  }
+  50% {
+    transform: translate(calc(var(--drift) * -0.52), calc(var(--drift) * -0.82));
+  }
+  75% {
+    transform: translate(calc(var(--drift) * -0.42), calc(var(--drift) * 0.86));
+  }
+  100% {
+    transform: translate(0, 0);
   }
 }
 
@@ -1352,6 +1447,7 @@ body {
   .bubbles > button:nth-of-type(3),
   .bubbles > button:nth-of-type(4),
   .bubbles > button:nth-of-type(5) {
+    animation-name: bubble-in;
     animation-duration: 200ms;
   }
 

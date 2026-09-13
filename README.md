@@ -459,7 +459,34 @@ makes. It is the same known gap listed below, in a second place.
 the one reading it out, and one fixed sentence read forty times is one the child stops hearing as
 a question.
 
-**Positions reshuffle every round**, which is the one place this departs from the tracks
+### The bubbles wander, and the wander is a budget
+
+Each bubble traces its own circuit — five different paths, two of them going round the opposite
+way, on unequal 9.5–13s clocks so the group never visibly resynchronises inside a round. One
+shared path at different speeds reads as a single object being moved about; five circuits read as
+five things drifting.
+
+**The travel and the radius come out of one budget**, split by `DRIFT_SHARE`. Both are bound by
+the same two distances — how close two spots are, and how close a spot is to the edge of the
+area — so movement can only be bought by drawing the bubbles smaller:
+
+```
+2r + 2·drift ≤ closest      two bubbles drifting straight at each other
+    r + drift ≤ toEdge      one drifting outward
+        drift  = 0.42·r
+```
+
+At 0.42 that is bubbles about 165 across with **32–37 units of travel in every direction**,
+against the 192-across and 14-mostly-vertical they started at. The bound is **circular**, not
+per-axis — `drift` is a radius — and that is precisely what lets the paths move diagonally
+instead of only up and down. Every keyframe in [index.css](src/index.css) keeps its offset vector
+inside the unit circle, so one scalar bounds all five paths in all directions; check the
+hypotenuse, not the components, when editing one.
+
+`DRIFT_SHARE` is the number to change if a two-year-old starts missing. Raising it gives livelier
+bubbles and a smaller target.
+
+**Positions also reshuffle every round**, which is the one place this departs from the tracks
 deliberately. There the board shuffles once per attempt, with a note that per-round would be
 re-teaching the board every few seconds instead of testing recognition. That does not transfer: a
 bubble drifts while you look at it, so position was never a learnable cue here, and holding them
@@ -1142,6 +1169,28 @@ finger must never scroll, rubber-band, select text or pinch-zoom the board away.
 >                the Boxes card and no other, sits above it rather than on
 >                it, clears the track grid, and the bottom row is still
 >                inside the stage after the reflow (694/720, 1074/1138)
+> ```
+>
+> And for the bubble game, with `bun` on the geometry and Playwright on the screen:
+>
+> ```
+> picker grid    all 8 card slots inside the stage and none overlapping, on
+>                both stages; the category heading still spans exactly the
+>                Boxes card; 5 of 8 cards show a star line
+> bubble layout  4 and 5 bubbles on both stages: never overlapping and never
+>                off-stage EVEN AT FULL DRIFT toward each other; radius a
+>                constant 76-88 so no level has visibly bigger bubbles
+> the wander     44 samples over 11s, both stages: every bubble moves 45-57
+>                units on BOTH axes, worst excursion from its spot is inside
+>                the budget to the unit, closest approach between any two is
+>                ~52 units of clear air, nothing leaves the stage
+> four levels    5/4/5/5 bubbles, every bubble distinct, the asked-for token
+>                always present, a wrong tap draws the X, all four played
+>                through clean for 12/12
+> persistence    written under a "bubbles" key with no track key touched;
+>                the picker card then reads 12 / 12 Done
+> no regression  the boxes engine, clearance and browser suites all still
+>                pass unchanged
 > console        no errors or page errors on any screen
 >
 > all 4 tracks   level 1 of colours, shapes, numbers AND letters played to

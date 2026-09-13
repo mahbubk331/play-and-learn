@@ -253,7 +253,7 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
     },
     /* Below the head and the printed prompt, which together take the top 200. */
     bubbles: {
-      area: { left: 70, top: 210, width: 860, height: 460 },
+      area: { left: 60, top: 198, width: 880, height: 492 },
       /* Spread across the width, which is what this stage has. Both tables keep every spot at
          least 96 units from an edge, because that is the bubble radius the cap allows and the
          edge distance is what binds first on a 460-tall area. */
@@ -326,7 +326,7 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
       score: { left: 40, width: 260, height: 120, gap: 22 },
     },
     bubbles: {
-      area: { left: 45, top: 250, width: 550, height: 780 },
+      area: { left: 36, top: 238, width: 568, height: 802 },
       /* Stacked 2-1-2 down the height, because the width cannot take three abreast at full
          bubble size. The middle bubble is centred, which is also the easiest one to reach. */
       spots: {
@@ -546,17 +546,43 @@ let bubbleTable: Record<number, [number, number][]> = {};
 const MAX_BUBBLE_R = 96;
 
 /**
- * Where this round's bubbles go, and how big they are.
+ * How far a bubble may wander from its spot, as a fraction of its radius.
  *
- * THE RADIUS IS DERIVED, not authored, and that is what makes the table above safe to edit. It
- * is bounded by two things at once: 0.42 of the closest distance between any two positions, so
- * no two bubbles can touch however the table is rearranged; and the distance from the nearest
- * position to the edge of the area, so none can be drawn half outside it. Authoring the radius
- * separately is how a nudged position silently produces two overlapping tap targets.
+ * THE DRIFT AND THE RADIUS COME OUT OF ONE BUDGET, and this fraction is how it is split. Both
+ * are bound by the same two distances — how close two spots are, and how close a spot is to the
+ * edge of the area — so travel can only be bought by drawing the bubbles smaller. Raising this
+ * gives livelier bubbles and a smaller target; lowering it does the reverse.
+ *
+ * 0.42 puts the bubbles at about 165 across with 34 units of travel in EVERY direction, against
+ * the 192 and 14-mostly-vertical they started at. That is a visible wander for a target still
+ * wider than the draggable block, and it is the number to change if a two-year-old starts
+ * missing.
+ */
+const DRIFT_SHARE = 0.42;
+
+/**
+ * Where this round's bubbles go, how big they are, and how far they may wander.
+ *
+ * ALL THREE ARE DERIVED, not authored, and that is what makes the tables safe to edit. The
+ * radius and the drift are solved together from the two distances that constrain them:
+ *
+ *   closest   the smallest gap between any two spots. Two bubbles drifting straight at each
+ *             other close the gap by twice the drift, so `2r + 2*drift <= closest` keeps them
+ *             apart however the table is rearranged.
+ *   toEdge    the smallest distance from a spot to the edge of the area. A bubble drifting
+ *             outward needs `r + drift <= toEdge` to stay on the stage.
+ *
+ * With `drift = DRIFT_SHARE * r` both collapse to a bound on r, and the smaller wins. Authoring
+ * any of the three separately is how a nudged position silently produces two overlapping tap
+ * targets, or a bubble that wanders off the bottom of the screen.
+ *
+ * The bound is CIRCULAR — drift is a radius, not a per-axis allowance — which is what lets the
+ * paths in index.css move in any direction rather than only up and down. Every keyframe there
+ * keeps its offset vector inside the unit circle, so this one number bounds all of them.
  */
 export const bubbleSpots = (
   count: number,
-): { r: number; spots: { x: number; y: number }[] } => {
+): { r: number; drift: number; spots: { x: number; y: number }[] } => {
   const table = bubbleTable[count] ?? bubbleTable[4];
   const spots = table.map(([fx, fy]) => ({
     x: BUBBLE_AREA.left + fx * BUBBLE_AREA.width,
@@ -584,7 +610,15 @@ export const bubbleSpots = (
     ),
   );
 
-  return { r: Math.min(closest * 0.42, toEdge, MAX_BUBBLE_R), spots };
+  const r = Math.min(
+    MAX_BUBBLE_R,
+    // 2r + 2*(DRIFT_SHARE*r) <= closest
+    closest / (2 * (1 + DRIFT_SHARE)),
+    // r + DRIFT_SHARE*r <= toEdge
+    toEdge / (1 + DRIFT_SHARE),
+  );
+
+  return { r, drift: r * DRIFT_SHARE, spots };
 };
 
 let cols = 1;

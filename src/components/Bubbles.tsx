@@ -105,6 +105,7 @@ const Bubble = ({
   x,
   y,
   r,
+  drift,
   state,
   label,
   onPop,
@@ -114,6 +115,15 @@ const Bubble = ({
   x: number;
   y: number;
   r: number;
+  /**
+   * How far this bubble may wander, in logical units.
+   *
+   * Handed to CSS as `--drift` rather than baked into the keyframes, because it is solved in
+   * stage.ts against the spot spacing — the same calculation that gives `r`. Hard-coded pixels
+   * in index.css would be the same number in two places, and the CSS copy would not know the
+   * radius had changed.
+   */
+  drift: number;
   /** "idle" | "popping" — a popping bubble is mid-burst and no longer tappable. */
   state: "idle" | "popping";
   label: string;
@@ -126,7 +136,15 @@ const Bubble = ({
     <button
       type="button"
       className={state === "popping" ? "bubble bubble-pop" : "bubble"}
-      style={{ left: x - r, top: y - r, width: r * 2, height: r * 2 }}
+      style={
+        {
+          left: x - r,
+          top: y - r,
+          width: r * 2,
+          height: r * 2,
+          "--drift": `${drift}px`,
+        } as React.CSSProperties
+      }
       onClick={onPop}
       disabled={disabled}
       aria-label={label}
@@ -247,7 +265,7 @@ export const Bubbles = ({
   const [verb, setVerb] = useState<Verb>(() => pickVerb(null));
 
   const round: Round | undefined = rounds[roundIndex];
-  const { r, spots } = bubbleSpots(tokens.length);
+  const { r, drift, spots } = bubbleSpots(tokens.length);
 
   /**
    * A fresh scatter: the same tokens in new positions, and a new verb.
@@ -472,6 +490,7 @@ export const Bubbles = ({
             x={spot.x}
             y={spot.y}
             r={r}
+            drift={drift}
             state={popped === slot ? "popping" : "idle"}
             label={tokenLabel(token)}
             disabled={!playable}
