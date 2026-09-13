@@ -1209,14 +1209,91 @@ body {
 }
 
 /*
+ * THE ORBIT WRAPPER: what carries a bubble across the screen.
+ *
+ * Two nested elements because the motion is two motions, and CSS animations do not compose — two
+ * animations on one element both writing `transform` means the later simply wins. So the wrapper
+ * rides the shared orbit and the button inside it wobbles independently, and the two transforms
+ * multiply the way nesting always does.
+ *
+ * Duration and delay come in inline, not from here: the delay is a negative fraction of the
+ * duration, which is what spaces the bubbles evenly around the path, so the two numbers have to
+ * be computed together. See ORBIT_SECONDS in stage.ts.
+ *
+ * `linear`, and that is load-bearing rather than a taste: the separation between neighbours is
+ * solved in stage.ts along a linearly-interpolated polygon through the waypoints below. Easing
+ * between them would change where the bubbles actually are and could close a gap the solver
+ * believes is open.
+ */
+.bubble-orbit {
+  position: absolute;
+  animation-name: bubble-orbit;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/*
+ * THE TWELVE WAYPOINTS of the orbit, as fractions of `--ox` and `--oy`.
+ *
+ * Cosine and sine at 30 degree steps. THE COUNT MUST STAY AT TWELVE unless ORBIT_STEPS in
+ * stage.ts moves with it — the solver measures how close two bubbles get along this exact
+ * polygon, and the geometry check asserts the two agree.
+ *
+ * Twelve puts the flat sides 3.4% of the radius inside the true ellipse, which reads as a smooth
+ * curve at this size. Eight is visibly an octagon.
+ */
+@keyframes bubble-orbit {
+  0% {
+    transform: translate(calc(var(--ox) * 1), calc(var(--oy) * 0));
+  }
+  8.3333% {
+    transform: translate(calc(var(--ox) * 0.866), calc(var(--oy) * 0.5));
+  }
+  16.6667% {
+    transform: translate(calc(var(--ox) * 0.5), calc(var(--oy) * 0.866));
+  }
+  25% {
+    transform: translate(calc(var(--ox) * 0), calc(var(--oy) * 1));
+  }
+  33.3333% {
+    transform: translate(calc(var(--ox) * -0.5), calc(var(--oy) * 0.866));
+  }
+  41.6667% {
+    transform: translate(calc(var(--ox) * -0.866), calc(var(--oy) * 0.5));
+  }
+  50% {
+    transform: translate(calc(var(--ox) * -1), calc(var(--oy) * 0));
+  }
+  58.3333% {
+    transform: translate(calc(var(--ox) * -0.866), calc(var(--oy) * -0.5));
+  }
+  66.6667% {
+    transform: translate(calc(var(--ox) * -0.5), calc(var(--oy) * -0.866));
+  }
+  75% {
+    transform: translate(calc(var(--ox) * 0), calc(var(--oy) * -1));
+  }
+  83.3333% {
+    transform: translate(calc(var(--ox) * 0.5), calc(var(--oy) * -0.866));
+  }
+  91.6667% {
+    transform: translate(calc(var(--ox) * 0.866), calc(var(--oy) * -0.5));
+  }
+  100% {
+    transform: translate(calc(var(--ox) * 1), calc(var(--oy) * 0));
+  }
+}
+
+/*
  * One bubble: a round tap target with the token drawn inside it.
  *
- * Sized and placed inline from `bubbleSpots`, because the radius is derived from the position
- * table rather than authored. Everything here is the part that does not depend on which bubble
+ * Fills its orbit wrapper, which owns the position and the size — both derived in stage.ts, so
+ * neither is authored here. Everything below is the part that does not depend on which bubble
  * it is.
  */
 .bubble {
   position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1231,10 +1308,13 @@ body {
   -webkit-tap-highlight-color: transparent;
   filter: drop-shadow(0 6px 0 rgba(42, 36, 56, 0.14));
   /*
-   * Two animations, and the ORDER matters: both animate `transform`, and animations do not
-   * compose — the last one that applies wins. `bubble-in` has no delay and the drift has 380ms
-   * of it, which is exactly the in-animation's length, so the float takes over on the frame the
+   * Two animations on the button, and the ORDER matters: both write `transform`, and animations
+   * do not compose — the last one that applies wins. `bubble-in` has no delay and the wobble has
+   * 380ms of it, exactly the entrance's length, so the wobble takes over on the frame the
    * entrance finishes rather than cancelling it from the start.
+   *
+   * The name and duration of the wobble come from the `.bubble-wobble-*` class below; this sets
+   * everything the five have in common.
    */
   animation:
     bubble-in 380ms cubic-bezier(0.22, 1.4, 0.4, 1) both,
@@ -1251,33 +1331,34 @@ body {
 }
 
 /*
- * Each bubble wanders its own way, on its own clock.
+ * Each bubble wobbles its own way, on its own clock, ON TOP of the shared orbit.
  *
- * A PATH EACH, not one path at different speeds. With a single set of keyframes all five trace
- * the same shape and the cluster reads as one object being moved about; five different circuits
- * — two of them going round the opposite way — is what makes them read as five things drifting
- * independently. The unequal durations then stop the group visibly resynchronising inside the
- * ten-odd seconds a round lasts.
+ * The orbit is what takes them across the screen; this is what stops five bubbles on one path
+ * looking like beads on a wire. A PATH EACH, not one path at five speeds: with shared keyframes
+ * all five trace the same shape and the group reads as a single object being moved. Two of these
+ * go round the opposite way and two cross themselves, and the unequal durations stop them
+ * visibly resynchronising with each other or with the 34-second lap.
  *
- * `nth-of-type` and not `nth-child`: the bubbles are buttons among div siblings, so counting
- * children would number them by their position in the whole screen rather than among each other.
+ * A CLASS EACH rather than `nth-of-type`, which is what this was. The buttons are now nested one
+ * deep inside their orbit wrappers, so counting siblings would count wrappers and every bubble
+ * would take path 1.
  */
-.bubbles > button:nth-of-type(2) {
+.bubble-wobble-2 {
   animation-name: bubble-in, bubble-drift-2;
   animation-duration: 380ms, 13s;
 }
 
-.bubbles > button:nth-of-type(3) {
+.bubble-wobble-3 {
   animation-name: bubble-in, bubble-drift-3;
   animation-duration: 380ms, 9.5s;
 }
 
-.bubbles > button:nth-of-type(4) {
+.bubble-wobble-4 {
   animation-name: bubble-in, bubble-drift-4;
   animation-duration: 380ms, 12s;
 }
 
-.bubbles > button:nth-of-type(5) {
+.bubble-wobble-5 {
   animation-name: bubble-in, bubble-drift-5;
   animation-duration: 380ms, 10.5s;
 }
@@ -1443,12 +1524,21 @@ body {
     animation: bubble-in 200ms ease-out both;
   }
 
-  .bubbles > button:nth-of-type(2),
-  .bubbles > button:nth-of-type(3),
-  .bubbles > button:nth-of-type(4),
-  .bubbles > button:nth-of-type(5) {
+  .bubble-wobble-2,
+  .bubble-wobble-3,
+  .bubble-wobble-4,
+  .bubble-wobble-5 {
     animation-name: bubble-in;
     animation-duration: 200ms;
+  }
+
+  /*
+   * The orbit stops, and the bubbles stay where their phase put them — still evenly spaced
+   * around the path, because the delay is negative and `both` holds the first frame it lands on.
+   * A screen of five bubbles that do not move is the whole game, minus the drifting.
+   */
+  .bubble-orbit {
+    animation-play-state: paused;
   }
 
   .bubble-pop {

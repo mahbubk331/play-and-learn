@@ -162,26 +162,6 @@ type LayoutSpec = {
   bubbles: {
     /** The rectangle the bubbles are scattered inside. See `bubbleSpots`. */
     area: { left: number; top: number; width: number; height: number };
-    /**
-     * Where the bubbles sit, as fractions of that area, by how many there are.
-     *
-     * A TABLE OF POSITIONS RATHER THAN RANDOM PLACEMENT, because random placement of circles
-     * that must not touch needs rejection sampling, and rejection sampling in a rectangle this
-     * tight either clumps them along the edges or occasionally fails to place the last one. A
-     * scatter drawn on purpose also just looks better: these are deliberately off-grid, because
-     * five bubbles in a neat row read as a row of buttons.
-     *
-     * PER LAYOUT, and the five-bubble case is why — the same reason memory.cols is per layout.
-     * One shared table gave the wide stage a radius of 64 against the narrow stage's 88 and the
-     * four-bubble level's 96, so the shape level had visibly bigger bubbles than the three
-     * levels around it. The wide stage is 860x460 and wants its five spread across; the tall one
-     * is 550x780 and has to stack them 2-1-2, because three abreast in 550 units leaves 176
-     * between centres and a bubble is 192 across.
-     *
-     * The four-bubble table happens to work on both and is repeated rather than shared, so each
-     * layout can be read and tuned without cross-referencing the other.
-     */
-    spots: Record<number, [number, number][]>;
   };
   hud: {
     starSize: number;
@@ -252,27 +232,7 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
       score: { left: 90, width: 400, height: 90, gap: 22 },
     },
     /* Below the head and the printed prompt, which together take the top 200. */
-    bubbles: {
-      area: { left: 60, top: 198, width: 880, height: 492 },
-      /* Spread across the width, which is what this stage has. Both tables keep every spot at
-         least 96 units from an edge, because that is the bubble radius the cap allows and the
-         edge distance is what binds first on a 460-tall area. */
-      spots: {
-        4: [
-          [0.22, 0.26],
-          [0.74, 0.22],
-          [0.26, 0.76],
-          [0.78, 0.72],
-        ],
-        5: [
-          [0.18, 0.3],
-          [0.5, 0.22],
-          [0.82, 0.32],
-          [0.28, 0.76],
-          [0.72, 0.78],
-        ],
-      },
-    },
+    bubbles: { area: { left: 60, top: 198, width: 880, height: 492 } },
     hud: { starSize: 30, stack: false },
   },
 
@@ -325,26 +285,7 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
       area: { left: 40, top: 190, width: 560, height: 700 },
       score: { left: 40, width: 260, height: 120, gap: 22 },
     },
-    bubbles: {
-      area: { left: 36, top: 238, width: 568, height: 802 },
-      /* Stacked 2-1-2 down the height, because the width cannot take three abreast at full
-         bubble size. The middle bubble is centred, which is also the easiest one to reach. */
-      spots: {
-        4: [
-          [0.22, 0.26],
-          [0.74, 0.22],
-          [0.26, 0.76],
-          [0.78, 0.72],
-        ],
-        5: [
-          [0.24, 0.14],
-          [0.76, 0.16],
-          [0.5, 0.42],
-          [0.24, 0.72],
-          [0.76, 0.74],
-        ],
-      },
-    },
+    bubbles: { area: { left: 36, top: 238, width: 568, height: 802 } },
     hud: { starSize: 26, stack: true },
   },
 };
@@ -528,97 +469,159 @@ export const boxesGrid = (
 const BUBBLE_AREA = { left: 0, top: 0, width: 0, height: 0 };
 
 /**
- * The active layout's scatter. See `spots` in the layout spec for why it is per layout.
+ * How many waypoints the orbit is drawn with.
  *
- * Which TOKEN lands in which position is shuffled every round (see components/Bubbles.tsx); the
- * positions themselves are fixed, which is what keeps them from overlapping.
+ * MUST MATCH THE NUMBER OF KEYFRAME STOPS in `bubble-orbit` in index.css, because the separation
+ * solved below is measured along the path CSS actually animates — a polygon through these
+ * waypoints, interpolated linearly — and not along the ideal ellipse. Twelve puts the flat sides
+ * 3.4% of the radius inside the curve, which reads as smooth and keeps the maths honest. The
+ * geometry check asserts the stylesheet still has twelve.
  */
-let bubbleTable: Record<number, [number, number][]> = {};
+export const ORBIT_STEPS = 12;
 
 /**
- * A cap on how big a bubble gets, in logical units.
+ * How long one lap takes, in seconds.
  *
- * Without it the four-bubble level draws them at whatever its wider spacing allows, which is
- * over 130 — four balloons filling the screen, visibly a different game from the five-bubble
- * levels either side of it. The cap keeps bubble size roughly constant across the four levels
- * and lets the spacing change instead.
+ * Set here rather than in the stylesheet because the phase offsets are computed from it — bubble
+ * `i` of `n` starts a negative `i/n` of a lap in, which is what spaces them evenly around the
+ * path. Duration in CSS and delay in TypeScript would be the same number in two places.
+ *
+ * 34 seconds is slow. A bubble crosses the wide stage in about seventeen of them, which is a
+ * drift rather than a chase — the target still has to be hittable by someone with poor aim who
+ * has just decided which one they want.
+ */
+export const ORBIT_SECONDS = 34;
+
+/**
+ * A cap on how big a bubble gets, in logical units. See the solver below for what else bounds it.
  */
 const MAX_BUBBLE_R = 96;
 
 /**
- * How far a bubble may wander from its spot, as a fraction of its radius.
+ * How far a bubble wobbles off the orbit, as a fraction of its radius.
  *
- * THE DRIFT AND THE RADIUS COME OUT OF ONE BUDGET, and this fraction is how it is split. Both
- * are bound by the same two distances — how close two spots are, and how close a spot is to the
- * edge of the area — so travel can only be bought by drawing the bubbles smaller. Raising this
- * gives livelier bubbles and a smaller target; lowering it does the reverse.
- *
- * 0.42 puts the bubbles at about 165 across with 34 units of travel in EVERY direction, against
- * the 192 and 14-mostly-vertical they started at. That is a visible wander for a target still
- * wider than the draggable block, and it is the number to change if a two-year-old starts
- * missing.
+ * The orbit is what carries a bubble across the screen; this is what stops five of them looking
+ * like beads on a wire. Raising it costs bubble size, because the wobble has to fit inside the
+ * gap the orbit leaves between neighbours.
  */
-const DRIFT_SHARE = 0.42;
+const WOBBLE_SHARE = 0.34;
+
+/** Where a bubble is, as a fraction of the orbit radii, `t` laps in. */
+const orbitAt = (t: number): { x: number; y: number } => {
+  /*
+   * The POLYGON, not the ellipse: linear interpolation between equally-timed waypoints is
+   * exactly what an `animation-timing-function: linear` keyframe list does, so this is the path
+   * the bubbles really take. Solving against the ellipse instead would under-report how close
+   * two of them get on the flats.
+   */
+  const step = ((t % 1) + 1) % 1 * ORBIT_STEPS;
+  const i = Math.floor(step);
+  const f = step - i;
+  const angle = (k: number) => (k / ORBIT_STEPS) * Math.PI * 2;
+  const a = angle(i);
+  const b = angle(i + 1);
+  return {
+    x: Math.cos(a) + (Math.cos(b) - Math.cos(a)) * f,
+    y: Math.sin(a) + (Math.sin(b) - Math.sin(a)) * f,
+  };
+};
 
 /**
- * Where this round's bubbles go, how big they are, and how far they may wander.
+ * The closest two of `count` evenly-spaced bubbles ever get, in logical units.
  *
- * ALL THREE ARE DERIVED, not authored, and that is what makes the tables safe to edit. The
- * radius and the drift are solved together from the two distances that constrain them:
+ * Sampled rather than solved, because the answer depends on where the polygon's corners fall
+ * relative to the phase offsets and there is no tidy closed form. 720 samples is every half
+ * degree of a lap, which is far finer than the 34-second animation needs.
  *
- *   closest   the smallest gap between any two spots. Two bubbles drifting straight at each
- *             other close the gap by twice the drift, so `2r + 2*drift <= closest` keeps them
- *             apart however the table is rearranged.
- *   toEdge    the smallest distance from a spot to the edge of the area. A bubble drifting
- *             outward needs `r + drift <= toEdge` to stay on the stage.
- *
- * With `drift = DRIFT_SHARE * r` both collapse to a bound on r, and the smaller wins. Authoring
- * any of the three separately is how a nudged position silently produces two overlapping tap
- * targets, or a bubble that wanders off the bottom of the screen.
- *
- * The bound is CIRCULAR — drift is a radius, not a per-axis allowance — which is what lets the
- * paths in index.css move in any direction rather than only up and down. Every keyframe there
- * keeps its offset vector inside the unit circle, so this one number bounds all of them.
+ * They are evenly spaced in TIME, which on an ellipse is not evenly spaced in DISTANCE — the
+ * bubbles bunch up as they round the narrow ends. That bunching is the binding constraint on
+ * bubble size, and it is why this is measured rather than assumed.
  */
-export const bubbleSpots = (
-  count: number,
-): { r: number; drift: number; spots: { x: number; y: number }[] } => {
-  const table = bubbleTable[count] ?? bubbleTable[4];
-  const spots = table.map(([fx, fy]) => ({
-    x: BUBBLE_AREA.left + fx * BUBBLE_AREA.width,
-    y: BUBBLE_AREA.top + fy * BUBBLE_AREA.height,
-  }));
-
+const closestApproach = (count: number, ox: number, oy: number): number => {
   let closest = Infinity;
-  for (let i = 0; i < spots.length; i++) {
-    for (let j = i + 1; j < spots.length; j++) {
-      closest = Math.min(
-        closest,
-        Math.hypot(spots[i].x - spots[j].x, spots[i].y - spots[j].y),
-      );
+  for (let k = 0; k < 720; k++) {
+    const t = k / 720;
+    for (let i = 0; i < count; i++) {
+      for (let j = i + 1; j < count; j++) {
+        const p = orbitAt(t + i / count);
+        const q = orbitAt(t + j / count);
+        closest = Math.min(
+          closest,
+          Math.hypot((p.x - q.x) * ox, (p.y - q.y) * oy),
+        );
+      }
+    }
+  }
+  return closest;
+};
+
+/**
+ * The orbit for a round: where its centre is, how far it reaches, and how big the bubbles on it
+ * are.
+ *
+ * EVERY BUBBLE TRAVELS THE WHOLE AREA. They ride one shared path at one speed, evenly spaced
+ * around it, which is what makes this safe: constant speed and constant phase offsets mean their
+ * separation is a fixed function of where they are, so it can be bounded once here rather than
+ * hoped for. Independent paths across a shared space cannot make that promise — two bubbles
+ * would eventually cross, and a tap landing on whichever happened to be on top is a wrong answer
+ * a child did not earn.
+ *
+ * SOLVED BY SEARCH, downward from the cap, because the constraints are circular: the orbit can
+ * only reach as far as the area minus a bubble, and how close the bubbles get depends on how far
+ * the orbit reaches. Trying radii in order and taking the first that fits is shorter than
+ * inverting that, and it cannot be wrong by algebra.
+ *
+ * Three things have to hold at the radius it returns:
+ *
+ *   the orbit fits      `ox = width/2 - r - wobble`, same for oy, both positive
+ *   nothing collides    `closest >= 2r + 2*wobble`, measured along the real path
+ *   nothing is tiny     it stops at 34, below which a bubble is not a target a
+ *                       two-year-old can hit; see the fallback
+ */
+export const bubbleOrbit = (
+  count: number,
+): {
+  r: number;
+  wobble: number;
+  cx: number;
+  cy: number;
+  ox: number;
+  oy: number;
+} => {
+  const cx = BUBBLE_AREA.left + BUBBLE_AREA.width / 2;
+  const cy = BUBBLE_AREA.top + BUBBLE_AREA.height / 2;
+
+  for (let r = MAX_BUBBLE_R; r >= 34; r -= 1) {
+    const wobble = r * WOBBLE_SHARE;
+    /*
+     * The orbit reserves the WOBBLE as well as the radius, so a bubble at its furthest wobble
+     * off the furthest point of the orbit is still inside the area. Reserving only the radius
+     * let the wobble carry them a further 32 units past it — which on the tall stage put them 4
+     * units from the edge of the screen itself.
+     */
+    const ox = BUBBLE_AREA.width / 2 - r - wobble;
+    const oy = BUBBLE_AREA.height / 2 - r - wobble;
+    if (ox <= 0 || oy <= 0) continue;
+
+    if (closestApproach(count, ox, oy) >= 2 * r + 2 * wobble) {
+      return { r, wobble, cx, cy, ox, oy };
     }
   }
 
-  const toEdge = Math.min(
-    ...spots.map((p) =>
-      Math.min(
-        p.x - BUBBLE_AREA.left,
-        BUBBLE_AREA.left + BUBBLE_AREA.width - p.x,
-        p.y - BUBBLE_AREA.top,
-        BUBBLE_AREA.top + BUBBLE_AREA.height - p.y,
-      ),
-    ),
-  );
+  /*
+   * Unreachable for the four levels that exist — five bubbles on the tighter stage solves at 60
+   * with room to spare. Returning the floor with no wobble is still a playable board, which is a
+   * better failure than throwing at a child mid-game.
+   */
+  return {
+    r: 34,
+    wobble: 0,
+    cx,
+    cy,
+    ox: BUBBLE_AREA.width / 2 - 34,
+    oy: BUBBLE_AREA.height / 2 - 34,
+  };
 
-  const r = Math.min(
-    MAX_BUBBLE_R,
-    // 2r + 2*(DRIFT_SHARE*r) <= closest
-    closest / (2 * (1 + DRIFT_SHARE)),
-    // r + DRIFT_SHARE*r <= toEdge
-    toEdge / (1 + DRIFT_SHARE),
-  );
-
-  return { r, drift: r * DRIFT_SHARE, spots };
 };
 
 let cols = 1;
@@ -668,7 +671,6 @@ export const applyLayout = (next: Orientation): void => {
   Object.assign(BOXES_AREA, spec.boxes.area);
   Object.assign(BOXES_SCORE, spec.boxes.score);
   Object.assign(BUBBLE_AREA, spec.bubbles.area);
-  bubbleTable = spec.bubbles.spots;
 
   cols = spec.cols;
   rowPitch = spec.rowPitch;

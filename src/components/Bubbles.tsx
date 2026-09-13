@@ -22,12 +22,18 @@
  * through the bubbles, press Enter — and it also gets each bubble a name in the accessibility
  * tree, so a screen reader says "Red" rather than "button".
  *
- * POSITIONS RESHUFFLE EVERY ROUND, which is the one place this deliberately departs from the
- * tracks. There the board is shuffled once per attempt, with a note explaining that per-round
- * would be re-teaching the board every few seconds instead of testing recognition. That
- * reasoning does not transfer: a bubble is a free-floating thing with no fixed home, it drifts
- * while you look at it, so position was never a cue that could be learned here. Holding them
- * still between rounds would make them read as buttons on a board.
+ * THE BUBBLES CROSS THE WHOLE SCREEN. They ride one shared orbit — solved in stage.ts — evenly
+ * spaced around it, each with its own wobble on top. One path at one speed is what makes it safe:
+ * constant speed and fixed phase offsets mean the gap between neighbours is a function of where
+ * they are, so it can be bounded once rather than hoped for. Five independent paths across a
+ * shared space cannot promise that, and two bubbles crossing means a tap landing on whichever
+ * happened to be on top — a wrong answer the child did not earn.
+ *
+ * WHICH TOKEN GETS WHICH PHASE reshuffles every round, which is the one place this departs from
+ * the tracks deliberately. There the board is shuffled once per attempt, with a note explaining
+ * that per-round would be re-teaching the board every few seconds instead of testing
+ * recognition. That reasoning does not transfer: these are never still, so position was never a
+ * cue that could be learned here.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -48,7 +54,7 @@ import {
 } from "../game";
 import { BUBBLE_LEVELS, MAX_WRONG, starsFor } from "../levels";
 import { hapticCorrect, hapticWrong } from "../native";
-import { STAGE, bubbleSpots } from "../stage";
+import { ORBIT_SECONDS, STAGE, bubbleOrbit } from "../stage";
 import { colors, fonts } from "../theme";
 import { tokenClip, tokenHue, tokenLabel, type Token } from "../tokens";
 import { HoleShape } from "./Board";
@@ -67,6 +73,8 @@ import { Hud } from "./Hud";
  * The same five the tracks have, minus the dragging ones — there is no "block is in the air"
  * state because there is no block. See Phase in game.ts.
  */
+type Point = { x: number; y: number };
+
 type Phase =
   | "playing"
   | "popped"
@@ -78,7 +86,34 @@ type Phase =
 /** The stage size a bubble's contents are drawn against, matching HoleShape's own base. */
 const TOKEN_BASE = 140;
 
-/** `0..n-1`, shuffled. Which token lands in which position. */
+/**
+ * Where an element actually is on the stage, in logical units.
+ *
+ * A DOM READ, which everything else on the stage manages to avoid — every other position in this
+ * app comes out of stage.ts. It is unavoidable here: a bubble's position lives in a CSS
+ * animation, so the transform matrix the browser is holding this frame IS the only source of
+ * truth for where it is. The X and the sparkles have to land on the bubble that was tapped, not
+ * on the middle of the orbit it happens to be riding.
+ *
+ * The stage is letterboxed inside the viewport and scaled, so both have to come off: subtract
+ * the stage origin, then divide by the ratio between its rendered and logical width.
+ */
+const stagePoint = (el: HTMLElement): { x: number; y: number } | null => {
+  const stage = el.closest(".stage") as HTMLElement | null;
+  if (!stage) return null;
+
+  const frame = stage.getBoundingClientRect();
+  const scale = frame.width / (parseFloat(stage.style.width) || STAGE.width);
+  if (!scale) return null;
+
+  const box = el.getBoundingClientRect();
+  return {
+    x: (box.left + box.width / 2 - frame.left) / scale,
+    y: (box.top + box.height / 2 - frame.top) / scale,
+  };
+};
+
+/** `0..n-1`, shuffled. Which token gets which phase on the orbit. */
 const shuffledSlots = (n: number): number[] => {
   const slots = Array.from({ length: n }, (_, i) => i);
   for (let i = slots.length - 1; i > 0; i--) {
@@ -102,50 +137,65 @@ const shuffledSlots = (n: number): number[] => {
  */
 const Bubble = ({
   token,
-  x,
-  y,
-  r,
-  drift,
+  slot,
+  count,
+  orbit,
   state,
   label,
   onPop,
   disabled,
 }: {
   token: Token;
-  x: number;
-  y: number;
-  r: number;
-  /**
-   * How far this bubble may wander, in logical units.
-   *
-   * Handed to CSS as `--drift` rather than baked into the keyframes, because it is solved in
-   * stage.ts against the spot spacing — the same calculation that gives `r`. Hard-coded pixels
-   * in index.css would be the same number in two places, and the CSS copy would not know the
-   * radius had changed.
-   */
-  drift: number;
+  /** Which phase of the orbit this bubble rides, and which wobble path it gets. */
+  slot: number;
+  count: number;
+  orbit: ReturnType<typeof bubbleOrbit>;
   /** "idle" | "popping" — a popping bubble is mid-burst and no longer tappable. */
   state: "idle" | "popping";
   label: string;
-  onPop: () => void;
+  onPop: (at: { x: number; y: number } | null) => void;
   disabled: boolean;
 }) => {
   const hue = tokenHue(token);
+  const { r, wobble, cx, cy, ox, oy } = orbit;
 
   return (
-    <button
-      type="button"
-      className={state === "popping" ? "bubble bubble-pop" : "bubble"}
+    /*
+      The wrapper rides the orbit, the button wobbles inside it. Everything positional is handed
+      to CSS as a custom property rather than written into the keyframes, because all of it is
+      solved in stage.ts — pixels in the stylesheet would be the same numbers in two places, and
+      the stylesheet copy would not know the radius had changed.
+
+      The negative delay is what spaces the bubbles out: bubble `slot` of `count` starts that
+      fraction of a lap already elapsed. Duration is set here too, since the delay is computed
+      from it.
+    */
+    <div
+      className="bubble-orbit"
       style={
         {
-          left: x - r,
-          top: y - r,
+          left: cx - r,
+          top: cy - r,
           width: r * 2,
           height: r * 2,
-          "--drift": `${drift}px`,
+          "--ox": `${ox}px`,
+          "--oy": `${oy}px`,
+          animationDuration: `${ORBIT_SECONDS}s`,
+          animationDelay: `-${(slot / count) * ORBIT_SECONDS}s`,
         } as React.CSSProperties
       }
-      onClick={onPop}
+    >
+    <button
+      type="button"
+      className={[
+        "bubble",
+        `bubble-wobble-${(slot % 5) + 1}`,
+        state === "popping" ? "bubble-pop" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={{ "--drift": `${wobble}px` } as React.CSSProperties}
+      onClick={(e) => onPop(stagePoint(e.currentTarget))}
       disabled={disabled}
       aria-label={label}
     >
@@ -196,6 +246,7 @@ const Bubble = ({
         />
       </svg>
     </button>
+    </div>
   );
 };
 
@@ -260,12 +311,19 @@ export const Bubbles = ({
   const [stars, setStars] = useState(bankedStars);
   const [phase, setPhase] = useState<Phase>("playing");
 
-  const [popped, setPopped] = useState<number | null>(null);
-  const [missed, setMissed] = useState<number | null>(null);
+  /**
+   * Which slot burst or was missed, and WHERE IT WAS when it happened.
+   *
+   * The position is captured at the tap rather than looked up, because the bubbles move: by the
+   * time the burst renders, the one that was tapped has carried on along the orbit. Holding the
+   * point means the sparkles and the X land where the child actually touched.
+   */
+  const [popped, setPopped] = useState<{ slot: number; at: Point } | null>(null);
+  const [missed, setMissed] = useState<{ slot: number; at: Point } | null>(null);
   const [verb, setVerb] = useState<Verb>(() => pickVerb(null));
 
   const round: Round | undefined = rounds[roundIndex];
-  const { r, drift, spots } = bubbleSpots(tokens.length);
+  const orbit = bubbleOrbit(tokens.length);
 
   /**
    * A fresh scatter: the same tokens in new positions, and a new verb.
@@ -316,13 +374,15 @@ export const Bubbles = ({
     setPhase("playing");
   }, []);
 
-  const tap = (slot: number) => {
+  const tap = (slot: number, at: Point | null) => {
     if (phase !== "playing" || !round) return;
 
     const token = tokens[order[slot]];
+    // Falls back to the middle of the orbit, which only happens if the DOM read failed.
+    const where = at ?? { x: orbit.cx, y: orbit.cy };
 
     if (tokenLabel(token) === tokenLabel(round.token)) {
-      setPopped(slot);
+      setPopped({ slot, at: where });
       setPhase("popped");
       nonce.current += 1;
       hapticCorrect();
@@ -344,7 +404,7 @@ export const Bubbles = ({
     }
 
     const spent = wrong + 1;
-    setMissed(slot);
+    setMissed({ slot, at: where });
     setWrong(spent);
     nonce.current += 1;
 
@@ -475,47 +535,35 @@ export const Bubbles = ({
 
       {order.map((tokenIndex, slot) => {
         const token = tokens[tokenIndex];
-        const spot = spots[slot];
-        if (!spot) return null;
 
         return (
           <Bubble
             /*
-              Keyed by the POSITION and the round, not by the token. A bubble has to be a fresh
-              element each round for the float animation to restart from a new offset; keyed by
-              token it would keep its old animation and slide across the screen to its new spot.
+              Keyed by the SLOT and the round, not by the token. A bubble has to be a fresh
+              element each round for its entrance to replay; keyed by token it would keep the old
+              element and simply change phase, which reads as one bubble teleporting round the
+              orbit.
             */
             key={`${roundIndex}-${slot}`}
             token={token}
-            x={spot.x}
-            y={spot.y}
-            r={r}
-            drift={drift}
-            state={popped === slot ? "popping" : "idle"}
+            slot={slot}
+            count={order.length}
+            orbit={orbit}
+            state={popped?.slot === slot ? "popping" : "idle"}
             label={tokenLabel(token)}
             disabled={!playable}
-            onPop={() => tap(slot)}
+            onPop={(at) => tap(slot, at)}
           />
         );
       })}
 
-      {/* On the bubble that burst. */}
-      {phase === "popped" && popped !== null && spots[popped] ? (
-        <Sparkles
-          x={spots[popped].x}
-          y={spots[popped].y}
-          nonce={nonce.current}
-        />
+      {/* Where the bubble was when it burst. */}
+      {phase === "popped" && popped ? (
+        <Sparkles x={popped.at.x} y={popped.at.y} nonce={nonce.current} />
       ) : null}
 
-      {(phase === "wrong" || phase === "restarting") &&
-      missed !== null &&
-      spots[missed] ? (
-        <WrongMark
-          x={spots[missed].x}
-          y={spots[missed].y}
-          nonce={nonce.current}
-        />
+      {(phase === "wrong" || phase === "restarting") && missed ? (
+        <WrongMark x={missed.at.x} y={missed.at.y} nonce={nonce.current} />
       ) : null}
 
       {phase === "restarting" ? <RestartCard /> : null}
