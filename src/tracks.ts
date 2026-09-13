@@ -18,6 +18,7 @@
  */
 
 import {
+  BUBBLE_LEVELS,
   COLOR_LEVELS,
   LETTER_LEVELS,
   NUMBER_LEVELS,
@@ -81,8 +82,31 @@ export const trackById = (id: Mode): Track => {
   return found;
 };
 
-/** Three stars a level, so this is the perfect score for one track. */
-export const maxStars = (track: Track): number => track.levels.length * 3;
+/**
+ * The bubble game, described the way a track is so the picker can render its card from the same
+ * component and show the same star line.
+ *
+ * NOT IN `TRACKS`, and that is the point of it being separate rather than a fifth entry. A Track
+ * is a level list the drag engine runs; this is a level list a different screen runs, and
+ * `trackById` must never hand it to App's track code. What it shares with a track is only what
+ * the picker needs: a title, a blurb, levels to count, and a progress key.
+ */
+export const BUBBLES = {
+  id: "bubbles" as const,
+  title: "Bubbles",
+  blurb: "Pop the one you are asked for",
+  levels: BUBBLE_LEVELS,
+};
 
-/** Perfect score across all four tracks. Shown on the picker. */
-export const TOTAL_STARS = TRACKS.reduce((sum, t) => sum + maxStars(t), 0);
+/** Three stars a level, so this is the perfect score for one game. */
+export const maxStars = (game: { levels: Level[] }): number =>
+  game.levels.length * 3;
+
+/**
+ * Perfect score across everything the picker scores. Shown beside the title.
+ *
+ * The bubble game counts. It has levels and stars and the same three-try rule, so leaving it out
+ * would make a full house read as less than 100%.
+ */
+export const TOTAL_STARS =
+  TRACKS.reduce((sum, t) => sum + maxStars(t), 0) + maxStars(BUBBLES);

@@ -1,66 +1,55 @@
 import { ANIMALS, type AnimalId } from "../animals";
 import { zooArt } from "../critters/zoo";
 import { HUES } from "../hues";
-import type { Mode } from "../levels";
-import { MENU, SHAPES, STAGE, extraSlotLeft } from "../stage";
-import { maxStars, TOTAL_STARS, TRACKS, type Track } from "../tracks";
-import type { Progress } from "../native";
+import type { GameId, Mode } from "../levels";
+import { MENU, MENU_SLOTS, SHAPES, STAGE, menuSlot } from "../stage";
+import { BUBBLES, TOTAL_STARS, TRACKS, maxStars } from "../tracks";
+import type { Progress, TrackProgress } from "../native";
 import { colors, fonts } from "../theme";
 
 import { placedPoints } from "./Board";
 import { Star } from "./Hud";
 
 /**
- * The picker: four games, one tap each. This is the home screen.
+ * The picker: eight games, one tap each. This is the home screen.
  *
  * It replaces resuming straight into the saved level, which is what the game used to do. That
- * behaviour is not gone, it moved: each card shows where its own track was left and starts
- * there, so a child who was on colour level 3 and a child who was on number level 2 both get
- * their place back — they just choose which one first.
+ * behaviour is not gone, it moved: each card shows where its own game was left and starts there,
+ * so a child who was on colour level 3 and a child who was on number level 2 both get their
+ * place back — they just choose which one first.
  *
  * DESIGNED FOR TWO READERS AT ONCE, which is the whole difficulty of this screen:
  *
  *   the child   cannot read a word of it. So every card leads with a picture of what the game
  *               actually asks for — four coloured dots, the four outlines, "123", "ABC" — drawn
  *               with the same geometry the board uses, not with an icon that merely suggests it.
- *               The four cards are also large and far apart, because the tap comes from a hand
- *               with poor aim.
- *   the adult   is the one who chooses on the child's behalf, and needs to know what a track
+ *   the adult   is the one who chooses on the child's behalf, and needs to know what a game
  *               teaches and how far in they are. That is the blurb and the star count.
  *
- * The tracks are in acquisition order, top-left to bottom-right, and NOTHING IS LOCKED. A gate
- * would mean a four-year-old who is ready for letters has to be walked through colours first,
- * and the person who would have to do the walking is the one holding the tablet.
+ * ONE CARD SHAPE FOR ALL EIGHT. The four learning games used to have a wide card — icon beside
+ * the text — and the others a narrow centred one, and that difference is what filled the stage:
+ * two columns of 420 units is a lot of width to show four things, and it left no room for a
+ * fifth game. Every card is now the narrow shape, four across the landscape stage and two across
+ * the portrait one, so eight cards take the room six used to. See `iconSize` in stage.ts.
+ *
+ * NOTHING IS LOCKED. A gate would mean a four-year-old who is ready for letters has to be walked
+ * through colours first, and the person who would have to do the walking is the one holding the
+ * tablet. The order is the recommendation: the four kinds in acquisition order, then the games
+ * that are not a ladder at all.
  */
 
 /**
- * Two columns of two for the games, then a full-width banner for the animal game.
- *
- * 420*2 + 34 = 874 wide in a 1000 stage, so 63 either side. Three rows of 150 with 24 between
- * them runs 188..686, leaving 34 under the last — the same margin the two-row version had, which
- * is what made room for a fifth card without shrinking the stage's breathing space.
- *
- * The cards got shorter (232 -> 150) rather than narrower, because the text inside is a title, a
- * one-line blurb and a status line, and losing width would have wrapped all three.
- */
-/*
- * The grid comes from stage.ts now, because it changes shape with the stage: two columns of
- * 420 across the landscape stage, one column of 480 down the portrait one. Two 420s do not fit
- * across 640, and narrowing them to fit wraps the title, the blurb AND the status line.
- */
-
-/**
- * What each track looks like at a glance.
+ * What each learning game looks like at a glance.
  *
  * Drawn from the same data the board draws from — `SHAPES` polygons through `placedPoints`, the
  * real `HUES` values — so a card cannot end up advertising a game the track does not contain.
  * The alternative was four hand-drawn icons, which is four more things to keep in step.
  *
- * EVERY COORDINATE IS A FRACTION OF `box`. They were absolute, tuned for the 120px icon the
- * two-row picker had room for; the moment the cards got shorter to fit a fifth, a 104px box drew
- * the same 120px artwork and the quadrants stopped being quadrants.
+ * EVERY COORDINATE IS A FRACTION OF `box`, because the box shrank twice: once when the cards got
+ * shorter to fit a fifth, and again when they got narrower to fit eight. Absolute coordinates
+ * tuned for one size draw the wrong picture at the next, and the quadrants stop being quadrants.
  */
-const TrackIcon = ({ id, box = 104 }: { id: Mode; box?: number }) => {
+const TrackIcon = ({ id, box }: { id: Mode; box: number }) => {
   /** Quadrant centres, for the two icons made of four things. */
   const near = box * 0.3;
   const far = box * 0.7;
@@ -138,20 +127,68 @@ const TrackIcon = ({ id, box = 104 }: { id: Mode; box?: number }) => {
 };
 
 /**
+ * A cluster of bubbles for the bubble game's card.
+ *
+ * Three of them, each holding a colour, because the game's first level is colours and a single
+ * bubble says nothing about there being a choice to make. The gloss highlight is the thing that
+ * makes a filled circle read as a bubble rather than as one of the colour game's balls — it is
+ * the same trick the draggable block uses, and it is why this icon can share a picker row with
+ * the colour card without the two being confused.
+ */
+const BubbleIcon = ({ box }: { box: number }) => {
+  const hue = (id: string) => HUES.find((h) => h.id === id) ?? HUES[0];
+  const bubbles = [
+    { at: [0.33, 0.38], r: 0.23, hue: hue("red") },
+    { at: [0.72, 0.29], r: 0.17, hue: hue("blue") },
+    { at: [0.58, 0.74], r: 0.19, hue: hue("yellow") },
+  ];
+
+  return (
+    <svg width={box} height={box} viewBox={`0 0 ${box} ${box}`} aria-hidden="true">
+      {bubbles.map((b) => (
+        <g key={b.hue.id}>
+          <circle
+            cx={b.at[0] * box}
+            cy={b.at[1] * box}
+            r={b.r * box}
+            fill={b.hue.fill}
+            stroke={colors.ink}
+            strokeWidth={Math.max(4, box * 0.055)}
+          />
+          <ellipse
+            cx={(b.at[0] - b.r * 0.34) * box}
+            cy={(b.at[1] - b.r * 0.38) * box}
+            rx={b.r * 0.3 * box}
+            ry={b.r * 0.2 * box}
+            fill="rgba(255,255,255,0.62)"
+          />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+/**
  * The line under the blurb: how far in, and how many stars.
  *
- * "Start" rather than "Level 1 of 3" for an untouched track, because those say the same thing
- * and only one of them reads as an invitation. A finished track says so outright — otherwise it
- * would sit at "Level 3 of 3" forever, which looks like unfinished business.
+ * "Start" rather than "Level 1 of 3" for an untouched game, because those say the same thing and
+ * only one of them reads as an invitation. A finished game says so outright — otherwise it would
+ * sit at "Level 3 of 3" forever, which looks like unfinished business.
+ *
+ * Takes a star TOTAL rather than a Track, so the bubble game — which is not a track — gets the
+ * same line from the same component rather than a near-copy that could drift.
+ *
+ * "Level 3" rather than the "Level 3 of 7" this used to say. The card is 199 units wide now
+ * instead of 420, and "of 7" is the least informative thing on the line: the star count beside
+ * it already says how much is left, out of a total that is three times the level count.
  */
-const TrackStatus = ({
-  track,
+const StatusLine = ({
+  total,
   entry,
 }: {
-  track: Track;
-  entry: { levelIndex: number; stars: number } | undefined;
+  total: number;
+  entry: TrackProgress | undefined;
 }) => {
-  const total = maxStars(track);
   const stars = entry?.stars ?? 0;
   const level = (entry?.levelIndex ?? 0) + 1;
   const played = level > 1 || stars > 0;
@@ -159,26 +196,15 @@ const TrackStatus = ({
 
   return (
     <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        fontFamily: fonts.sans,
-        fontWeight: 600,
-        fontSize: 21,
-        color: colors.text,
-      }}
+      className="menu-card-status"
+      style={{ fontSize: MENU.statusSize, fontFamily: fonts.sans }}
     >
-      <Star filled={played} size={23} />
+      <Star filled={played} size={MENU.statusSize + 2} />
       <span>
         {stars} / {total}
       </span>
       <span style={{ opacity: 0.5 }}>
-        {complete
-          ? "All done"
-          : played
-            ? `Level ${level} of ${track.levels.length}`
-            : "Start"}
+        {complete ? "Done" : played ? `Level ${level}` : "Start"}
       </span>
     </div>
   );
@@ -189,9 +215,9 @@ const TrackStatus = ({
  *
  * The real artwork at a small size, not a drawing of it, for the same reason the four game icons
  * are the real polygons and hues: a card that advertises something the screen does not contain
- * is a card that will eventually be wrong. Four of the twelve, and the four a child names first.
+ * is a card that will eventually be wrong.
  */
-const AnimalStrip = ({ height = MENU.stripHeight }: { height?: number }) => {
+const AnimalStrip = () => {
   const ids: AnimalId[] = (["lion", "cow", "duck", "dog"] as AnimalId[]).slice(
     0,
     MENU.stripCount,
@@ -204,7 +230,7 @@ const AnimalStrip = ({ height = MENU.stripHeight }: { height?: number }) => {
           <svg
             key={id}
             viewBox="0 0 200 170"
-            height={height}
+            height={MENU.stripHeight}
             style={{ display: "block", flex: "none" }}
           >
             <Art />
@@ -216,7 +242,7 @@ const AnimalStrip = ({ height = MENU.stripHeight }: { height?: number }) => {
 };
 
 /**
- * A two-card icon for the memory game, in the same flat-ink style as the track icons.
+ * A two-card icon for the memory game, in the same flat-ink style as the rest.
  *
  * One card face down and one turned over, overlapping, because that is the entire mechanic and
  * a single card says nothing about it.
@@ -275,7 +301,7 @@ const MemoryIcon = ({ height }: { height: number }) => (
 );
 
 /**
- * A two-card icon for the boxes game, in the same flat-ink style as the rest.
+ * A two-card icon for the boxes game, in the same flat-ink style as the track icons.
  *
  * A 2x2 dot grid mid-game: three lines down, one box closed. The closed box is the whole point
  * of the game and a grid of bare dots would advertise nothing, so the icon is a POSITION rather
@@ -329,38 +355,38 @@ const BoxesIcon = ({ height }: { height: number }) => (
 );
 
 /**
- * One of the three cards on the bottom row: the park, the memory board, and the boxes game.
+ * One picker card. All eight are this.
  *
- * NONE OF THEM IS A TRACK, and the card says so by being shaped differently from the four above
- * — icon over title rather than beside it, centred rather than left-aligned, and no star count
- * because there is nothing to score. A card identical to the tracks would promise that it
- * behaves like one: levels, stars, somewhere to get to.
+ * A <button>, not a div with a handler. That is what gets keyboard focus, Enter and Space, and
+ * a name in the accessibility tree for free — and the adult setting the game up is the one who
+ * may be using any of those.
  *
- * Stacked rather than side-by-side internally, because this card is a third of the row and at
- * 147 units — which is what it comes to in portrait — a title beside an icon leaves too little
- * for either. Its type sizes come from the layout for the same reason; see `extraTitleSize`.
+ * Positioned from `menuSlot` rather than laid out in a grid container, because everything else
+ * on the stage is positioned in the same logical units and a flex container here would be the
+ * one place whose geometry does not come from the same numbers.
  */
-const ExtraCard = ({
+const Card = ({
+  slot,
   icon,
   title,
   blurb,
-  slot,
+  status,
   onPress,
 }: {
+  slot: number;
   icon: React.ReactNode;
   title: string;
   blurb: string;
-  /** Which of the three places in the bottom row, left to right. */
-  slot: number;
+  /** The star line, on the five cards that have progress. Omitted on the other three. */
+  status?: React.ReactNode;
   onPress: () => void;
 }) => (
   <button
     type="button"
-    className="menu-card menu-card-extra"
+    className="menu-card"
     style={{
-      left: extraSlotLeft(slot),
-      top: MENU.wideTop,
-      width: MENU.extraWidth,
+      ...menuSlot(slot),
+      width: MENU.card.width,
       height: MENU.card.height,
     }}
     onClick={onPress}
@@ -368,35 +394,28 @@ const ExtraCard = ({
     {icon}
 
     <div
-      style={{
-        fontFamily: fonts.display,
-        fontWeight: 800,
-        fontSize: MENU.extraTitleSize,
-        lineHeight: 1,
-        color: colors.ink,
-      }}
+      className="menu-card-title"
+      style={{ fontFamily: fonts.display, fontSize: MENU.cardTitleSize }}
     >
       {title}
     </div>
 
     <div
-      style={{
-        fontFamily: fonts.sans,
-        fontWeight: 600,
-        fontSize: MENU.extraBlurbSize,
-        lineHeight: 1.1,
-        color: colors.text,
-        opacity: 0.6,
-      }}
+      className="menu-card-blurb"
+      style={{ fontFamily: fonts.sans, fontSize: MENU.cardBlurbSize }}
     >
       {blurb}
     </div>
+
+    {status}
   </button>
 );
 
 export const Menu = ({
   progress,
   onPick,
+  /** The bubble game plays all four kinds, so it is not a track. See BUBBLES in tracks.ts. */
+  onBubbles,
   /** The animal game is not a track, so it gets its own way in. See animals.ts. */
   onAnimals,
   /** Nor is the memory board. See memory.ts. */
@@ -406,14 +425,84 @@ export const Menu = ({
 }: {
   progress: Progress;
   onPick: (id: Mode) => void;
+  onBubbles: () => void;
   onAnimals: () => void;
   onMemory: () => void;
   onBoxes: () => void;
 }) => {
-  const banked = TRACKS.reduce(
-    (sum, t) => sum + (progress[t.id]?.stars ?? 0),
+  const banked = ([...TRACKS, BUBBLES] as { id: GameId }[]).reduce(
+    (sum, g) => sum + (progress[g.id]?.stars ?? 0),
     0,
   );
+
+  /*
+   * The eight cards, in slot order: the four kinds in acquisition order, then bubbles — which
+   * plays all four — then the three that are not ladders at all.
+   *
+   * Built as one array so the count can be asserted against MENU_SLOTS, which is what the grid
+   * geometry in stage.ts is sized from. Adding a ninth card without widening the grid would
+   * otherwise silently draw it off the bottom of the stage.
+   */
+  const cards: React.ReactNode[] = [
+    ...TRACKS.map((track) => (
+      <Card
+        key={track.id}
+        slot={TRACKS.indexOf(track)}
+        icon={<TrackIcon id={track.id} box={MENU.iconSize} />}
+        title={track.title}
+        blurb={track.blurb}
+        status={
+          <StatusLine total={maxStars(track)} entry={progress[track.id]} />
+        }
+        onPress={() => onPick(track.id)}
+      />
+    )),
+
+    <Card
+      key="bubbles"
+      slot={4}
+      icon={<BubbleIcon box={MENU.iconSize} />}
+      title={BUBBLES.title}
+      blurb={BUBBLES.blurb}
+      status={
+        <StatusLine total={maxStars(BUBBLES)} entry={progress.bubbles} />
+      }
+      onPress={onBubbles}
+    />,
+
+    <Card
+      key="animals"
+      slot={5}
+      icon={<AnimalStrip />}
+      title="Animals"
+      blurb={`${ANIMALS.length} animals to meet`}
+      onPress={onAnimals}
+    />,
+
+    <Card
+      key="memory"
+      slot={6}
+      icon={<MemoryIcon height={MENU.stripHeight} />}
+      title="Memory"
+      blurb="Find the pairs"
+      onPress={onMemory}
+    />,
+
+    <Card
+      key="boxes"
+      slot={7}
+      icon={<BoxesIcon height={MENU.stripHeight} />}
+      title="Boxes"
+      blurb="Close a box, go again"
+      onPress={onBoxes}
+    />,
+  ];
+
+  if (cards.length !== MENU_SLOTS) {
+    throw new Error(
+      `Picker has ${cards.length} cards but the grid is sized for ${MENU_SLOTS}`,
+    );
+  }
 
   return (
     <div className="menu" style={{ width: STAGE.width, height: STAGE.height }}>
@@ -432,8 +521,8 @@ export const Menu = ({
           Play and Learn
         </div>
 
-        {/* Total across all four tracks. The per-track counts are on the cards; this is the
-            one number that answers "how are we doing overall". */}
+        {/* Total across everything that scores. The per-game counts are on the cards; this is
+            the one number that answers "how are we doing overall". */}
         <div
           style={{
             display: "flex",
@@ -450,116 +539,34 @@ export const Menu = ({
         </div>
       </div>
 
-      {TRACKS.map((track, i) => (
-        <button
-          key={track.id}
-          type="button"
-          className="menu-card"
-          // Positioned rather than laid out in a grid, because everything else on the stage is
-          // positioned in the same logical units and a flex container here would be the one
-          // place whose geometry does not come from the same numbers.
-          style={{
-            left:
-              MENU.card.left + (i % MENU.cols) * (MENU.card.width + MENU.card.gap),
-            top:
-              MENU.card.top +
-              Math.floor(i / MENU.cols) * (MENU.card.height + MENU.card.gap),
-            width: MENU.card.width,
-            height: MENU.card.height,
-          }}
-          onClick={() => onPick(track.id)}
-        >
-          <TrackIcon id={track.id} />
-
-          <div className="menu-card-text">
-            <div
-              style={{
-                fontFamily: fonts.display,
-                fontWeight: 800,
-                fontSize: 38,
-                lineHeight: 1,
-                color: colors.ink,
-              }}
-            >
-              {track.title}
-            </div>
-
-            <div
-              style={{
-                fontFamily: fonts.sans,
-                fontWeight: 500,
-                fontSize: 20,
-                lineHeight: 1.15,
-                color: colors.text,
-                opacity: 0.75,
-              }}
-            >
-              {track.blurb}
-            </div>
-
-            <TrackStatus track={track} entry={progress[track.id]} />
-          </div>
-        </button>
-      ))}
-
-      {/*
-        The bottom row: the three things that are not tracks. See ExtraCard.
-
-        Boxes goes last, and not only because it is newest. It is the one thing here that is NOT
-        for a two-year-old — it has an opponent and it can be lost — so it sits at the far end of
-        the row, furthest from the colour track a child of that age would be reaching for.
-      */}
-      <ExtraCard
-        slot={0}
-        icon={<AnimalStrip />}
-        title="Animals"
-        blurb={`${ANIMALS.length} animals to meet`}
-        onPress={onAnimals}
-      />
-
-      <ExtraCard
-        slot={1}
-        icon={<MemoryIcon height={MENU.stripHeight} />}
-        title="Memory"
-        blurb="Find the pairs"
-        onPress={onMemory}
-      />
+      {cards}
 
       {/*
         BOXES IS ITS OWN CATEGORY, and this heading is the whole of what makes that true on
-        screen. "Play and Learn" is four learning tracks, and the park and the memory board are
+        screen. "Play and Learn" is five learning games, and the park and the memory board are
         still the app doing its job — naming animals, remembering where things are. Boxes is the
         only thing here that teaches nothing and the only thing that can be lost, so it is
-        labelled rather than left to look like a fifth thing to learn from.
+        labelled rather than left to look like a sixth thing to learn from.
 
-        THE HEADING SPANS EXACTLY THE CARD UNDER IT, from the same `extraSlotLeft`, which is
-        what scopes it to this one card rather than to the row. A full-width heading would read
-        as a label on Animals and Memory too, and they are not in this category.
+        THE HEADING SPANS EXACTLY THE CARD UNDER IT, from the same `menuSlot`, which is what
+        scopes it to one card rather than to the row. A full-width heading would read as a label
+        on Memory and Animals too, and they are not in this category.
 
-        It sits in the band `extraGap` opens up above the bottom row. That band is why the track
-        grid now starts higher; see the note on `extraGap`. A fourth card row — the obvious way
-        to separate this — does not fit on either stage.
+        It sits in the band `extraGap` opens above the last row — slot 7 is the last column of
+        the last row on both stages, so this lands on Boxes whichever way the tablet is held.
       */}
       <div
         className="menu-category"
         style={{
-          left: extraSlotLeft(2),
-          top: MENU.wideTop - MENU.extraGap,
-          width: MENU.extraWidth,
+          left: menuSlot(MENU_SLOTS - 1).left,
+          top: menuSlot(MENU_SLOTS - 1).top - MENU.extraGap,
+          width: MENU.card.width,
           height: MENU.extraGap,
           fontSize: MENU.categorySize,
         }}
       >
         Fun game for kids
       </div>
-
-      <ExtraCard
-        slot={2}
-        icon={<BoxesIcon height={MENU.stripHeight} />}
-        title="Boxes"
-        blurb="Close a box, go again"
-        onPress={onBoxes}
-      />
     </div>
   );
 };

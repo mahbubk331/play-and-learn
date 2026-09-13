@@ -10,6 +10,7 @@ import {
   WrongMark,
 } from "./components/Feedback";
 import { Boxes } from "./components/Boxes";
+import { Bubbles } from "./components/Bubbles";
 import { Hud } from "./components/Hud";
 import { Memory } from "./components/Memory";
 import { Menu } from "./components/Menu";
@@ -124,18 +125,20 @@ const Block = ({
 /**
  * Which screen is up.
  *
- * Five, and there is no router: "menu" is the picker, "playing" is one of the four level tracks,
- * "animals" is the park, "memory" is the matching-pairs board and "boxes" is Dots and Boxes.
+ * Six, and there is no router: "menu" is the picker, "playing" is one of the four level tracks,
+ * "bubbles" is the popping game, "animals" is the park, "memory" is the matching-pairs board and
+ * "boxes" is Dots and Boxes.
  *
- * The last three are their own screens rather than tracks five, six and seven because none of
- * them is a level ladder over the token model — see animals.ts, memory.ts and boxes.ts.
+ * The last four are their own screens rather than tracks five to eight because none of them is a
+ * level ladder THE DRAG ENGINE can run. Three of them are not ladders at all; bubbles is one,
+ * with four levels and stars and the three-try rule, but you touch the answer instead of
+ * dragging a block to it, so it cannot be a Track either. See animals.ts, memory.ts, boxes.ts
+ * and bubbles.ts.
  *
- * The park is its own screen rather than a fifth track because it is not a game — no levels, no
- * rounds, no score, no wrong answer (see animals.ts). Everything about a TRACK comes from the
- * selected Track, so for the four games this really is the whole navigation model; the other
- * three just need somewhere to be.
+ * Everything about a TRACK comes from the selected Track, so for the four drag games this really
+ * is the whole navigation model; the other four just need somewhere to be.
  */
-type Screen = "menu" | "playing" | "animals" | "memory" | "boxes";
+type Screen = "menu" | "playing" | "animals" | "memory" | "boxes" | "bubbles";
 
 export const App = () => {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -499,6 +502,38 @@ export const App = () => {
   };
 
   /**
+   * Open the bubble game.
+   *
+   * The one of the four non-track screens that DOES hold progress, so unlike the other three
+   * this is not just a screen change — the component is handed where it was left and what it has
+   * banked, and hands back a level and a star count when one is finished. It owns its own level
+   * and round state; this file owns only the storage, which is the same division the tracks have
+   * except inverted.
+   */
+  const openBubbles = () => {
+    audio.current.unlock();
+    setScreen("bubbles");
+  };
+
+  /**
+   * Bank the bubble game's progress.
+   *
+   * Writes that one slot and carries the other four through untouched, exactly as a finished
+   * track level does — which is the entire point of progress being keyed by game rather than
+   * held as one number.
+   */
+  const bankBubbles = useCallback(
+    (levelIndex: number, stars: number) => {
+      setProgress((current) => {
+        const next: Progress = { ...current, bubbles: { levelIndex, stars } };
+        void saveProgress(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  /**
    * Back to the picker, from the HUD button, the park, or finishing a track.
    *
    * Phase is reset on the way out. Leaving it as "correct" would leave a feedback timer to fire
@@ -634,6 +669,7 @@ export const App = () => {
             onAnimals={openAnimals}
             onMemory={openMemory}
             onBoxes={openBoxes}
+            onBubbles={openBubbles}
           />
         ) : screen === "animals" ? (
           <Animals
@@ -646,6 +682,17 @@ export const App = () => {
             onMenu={goMenu}
             onSound={(clip) => audio.current.playAlone(clip as SoundName)}
             clipLength={(clip) => audio.current.duration(clip as SoundName)}
+          />
+        ) : screen === "bubbles" ? (
+          <Bubbles
+            onMenu={goMenu}
+            onSound={(clip, delay) =>
+              audio.current.play(clip as SoundName, delay)
+            }
+            onPopSound={() => audio.current.pop()}
+            resumeAt={progress.bubbles?.levelIndex ?? 0}
+            bankedStars={progress.bubbles?.stars ?? 0}
+            onBanked={bankBubbles}
           />
         ) : screen === "boxes" ? (
           /*

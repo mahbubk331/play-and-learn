@@ -76,9 +76,17 @@ const boardTokens = (level: Level, slots: number): Token[] => {
  *
  * Shuffled once per attempt, not per round. Per-round would be re-teaching the board every
  * few seconds instead of testing recognition.
+ *
+ * `slots` defaults to the four holes a track board has. The bubble game passes its own count,
+ * which is five on three of its levels — see `bubbles` on Level. A parameter rather than a
+ * second function because every line below is the same for both: draw that many distinct tokens
+ * of the level's kind, then shuffle unless it is a first level.
  */
-export const makeArrangement = (level: Level): Token[] => {
-  const tokens = boardTokens(level, HOLES_PER_BOARD);
+export const makeArrangement = (
+  level: Level,
+  slots = HOLES_PER_BOARD,
+): Token[] => {
+  const tokens = boardTokens(level, slots);
 
   if (!level.shuffleHoles) return tokens;
 

@@ -48,6 +48,15 @@ import { MAX_LETTER } from "./letters";
 /** Which kind of token a track deals in. A track id IS its mode; there is no second list. */
 export type Mode = "color" | "shape" | "number" | "letter";
 
+/**
+ * Anything the picker keeps progress for.
+ *
+ * The four tracks are keyed by their mode; the bubble game gets a key of its own because it is
+ * not a mode — it plays ALL FOUR of them, one per level. Saved progress is keyed by this, and
+ * native.ts says why adding a key is not a breaking change to the stored format.
+ */
+export type GameId = Mode | "bubbles";
+
 export type Level = {
   /** Level number WITHIN its track, so every track starts at 1. */
   n: number;
@@ -62,6 +71,14 @@ export type Level = {
   numberMax?: number;
   /** Letter levels draw their four holes from the first `letterMax` letters. */
   letterMax?: number;
+  /**
+   * How many bubbles are on screen. The bubble game only; the tracks always have four holes.
+   *
+   * Per level because the ceiling differs by mode: there are only four shapes, so the shape
+   * level cannot have five distinct bubbles. Every bubble must be distinct or the spoken prompt
+   * would have two right answers.
+   */
+  bubbles?: number;
 };
 
 /**
@@ -128,6 +145,46 @@ export const NUMBER_LEVELS: Level[] = [
   numberLevel(5, 16),
   numberLevel(6, 18),
   numberLevel(7, 20),
+];
+
+/**
+ * The bubble game: four levels, one per token kind, in the same acquisition order the tracks
+ * use.
+ *
+ * FOUR LEVELS AND NOT FOUR TRACKS, which is the difference between this and the picker's first
+ * four cards. There the kind is the whole game and the ramp happens inside it — seven number
+ * levels widening from 1-5 to 1-20. Here the kind IS the ramp: colours are the easiest thing to
+ * pop and letters the hardest, so moving from one to the next is the progression.
+ *
+ * Five bubbles, except on shapes. `shared/shapes.ts` has four, and a fifth bubble would have to
+ * repeat one — which would give the spoken prompt two correct answers.
+ *
+ * The number and letter levels keep a deliberately small pool (1-10, A-J) rather than the full
+ * 1-20 and A-Z the tracks reach. This game asks a child to FIND a character among five at a
+ * glance rather than to fit one into a hole they can take their time over, and five of
+ * twenty-six is a harder search than five of ten without being a better one.
+ */
+export const BUBBLE_LEVELS: Level[] = [
+  { n: 1, rounds: 6, shuffleHoles: true, maxRotation: 0, mode: "color", bubbles: 5 },
+  { n: 2, rounds: 6, shuffleHoles: true, maxRotation: 0, mode: "shape", bubbles: 4 },
+  {
+    n: 3,
+    rounds: 6,
+    shuffleHoles: true,
+    maxRotation: 0,
+    mode: "number",
+    bubbles: 5,
+    numberMax: 10,
+  },
+  {
+    n: 4,
+    rounds: 6,
+    shuffleHoles: true,
+    maxRotation: 0,
+    mode: "letter",
+    bubbles: 5,
+    letterMax: 10,
+  },
 ];
 
 export const LETTER_LEVELS: Level[] = [

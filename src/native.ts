@@ -18,7 +18,7 @@ import { ScreenOrientation } from "@capacitor/screen-orientation";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
 
-import { LEVELS_VERSION, type Mode } from "./levels";
+import { LEVELS_VERSION, type GameId } from "./levels";
 
 export const isNative = Capacitor.isNativePlatform();
 
@@ -102,7 +102,7 @@ export type TrackProgress = { levelIndex: number; stars: number };
  * breaking change to the stored format — the new one simply has no entry yet — which is why
  * LEVELS_VERSION only has to move when an existing track's level list changes meaning.
  */
-export type Progress = Partial<Record<Mode, TrackProgress>>;
+export type Progress = Partial<Record<GameId, TrackProgress>>;
 
 /** What is actually stored: the progress plus the level-structure version it was earned under. */
 type Stored = { v: number; tracks: Progress };
@@ -174,7 +174,7 @@ export const loadProgress = async (): Promise<Progress> => {
     for (const [id, entry] of Object.entries(parsed.tracks)) {
       const valid = validEntry(entry);
       // One corrupt track entry loses that track, not the other three.
-      if (valid) out[id as Mode] = valid;
+      if (valid) out[id as GameId] = valid;
     }
     return out;
   } catch {

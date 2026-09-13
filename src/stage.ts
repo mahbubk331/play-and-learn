@@ -87,46 +87,43 @@ type LayoutSpec = {
       left: number;
       top: number;
     };
-    /** Cards per row on the picker. */
+    /** Cards per row on the picker. `MENU_SLOTS / cols` gives the rows. */
     cols: number;
     titleSize: number;
     scoreSize: number;
     /**
-     * The animal banner's row of sample animals: how tall, and how many.
+     * ONE CARD SHAPE FOR ALL EIGHT, which is the whole of why the picker can hold eight.
      *
-     * Both shrink in portrait because the banner is a strip beside a title, a blurb and a
-     * status line, and at four animals 96 tall that strip is 458 units wide inside a card with
-     * 412 to give — so the text was pushed clean off the card and off the stage behind it.
+     * The four track cards used to be 420x150 with the icon BESIDE a title, blurb and star line,
+     * and the three others 272x150 with the icon OVER a shorter stack. Two shapes meant two
+     * budgets, and the wide one was what filled the stage: two columns of 420 is 864 units of
+     * width to show four things, and it left no row free for a fifth game.
+     *
+     * Every card is now the narrow, centred, icon-over-text shape. Four fit across the landscape
+     * stage where two did, and two across the portrait stage where one did — so eight cards take
+     * the room six used to, with a row spare.
      */
+    iconSize: number;
+    /** The animal strip on the park's card: how tall each head, and how many. */
     stripHeight: number;
     stripCount: number;
+    cardTitleSize: number;
+    cardBlurbSize: number;
+    /** The star-and-progress line, on the five cards that have progress to report. */
+    statusSize: number;
     /**
-     * Type sizes for the bottom row's cards.
+     * Type size for a category heading over one card.
      *
-     * Their own sizes rather than the track cards', because that row holds THREE cards now and
-     * each is a third of the grid — 272 units on the wide stage and 147 on the tall one, against
-     * 420 and 480 for a track card. At the track card's 34px a title as ordinary as "Animals"
-     * does not fit across the portrait one.
-     */
-    extraTitleSize: number;
-    extraBlurbSize: number;
-    /**
-     * Type size for a category heading over one of the bottom-row cards.
-     *
-     * See `extraGap` for the band it sits in, and `extraSlotLeft` for placing it over a card.
+     * See `extraGap` for the band it sits in, and `menuSlot` for placing it over a card.
      */
     categorySize: number;
     /**
-     * The band between the last row of track cards and the bottom row.
+     * The band above the LAST row, wider than `card.gap`.
      *
-     * WIDER THAN `card.gap`, and that difference is the entire room a category heading has to
-     * live in. It was one `card.gap` — 24 units on the wide stage and 20 on the tall one — and
-     * a heading does not go in 20 units.
-     *
-     * The room is bought by starting the track grid higher rather than by shrinking anything.
-     * Neither stage has a fourth card row in it to give: the landscape picker would need 782
-     * units for four rows against the 720 it has, and shrinking the track cards to fit reflows
-     * the title, blurb and status line inside all four of them.
+     * That difference is the entire room the category heading has to live in — a heading does
+     * not go in the 20 units an ordinary gap gives. It sits above the last row because that is
+     * the row Boxes is in, on both stages: slot 7 of 8 is the last column of the last row
+     * whether the grid is 4x2 or 2x4.
      */
     extraGap: number;
   };
@@ -162,6 +159,30 @@ type LayoutSpec = {
      */
     score: { left: number; width: number; height: number; gap: number };
   };
+  bubbles: {
+    /** The rectangle the bubbles are scattered inside. See `bubbleSpots`. */
+    area: { left: number; top: number; width: number; height: number };
+    /**
+     * Where the bubbles sit, as fractions of that area, by how many there are.
+     *
+     * A TABLE OF POSITIONS RATHER THAN RANDOM PLACEMENT, because random placement of circles
+     * that must not touch needs rejection sampling, and rejection sampling in a rectangle this
+     * tight either clumps them along the edges or occasionally fails to place the last one. A
+     * scatter drawn on purpose also just looks better: these are deliberately off-grid, because
+     * five bubbles in a neat row read as a row of buttons.
+     *
+     * PER LAYOUT, and the five-bubble case is why — the same reason memory.cols is per layout.
+     * One shared table gave the wide stage a radius of 64 against the narrow stage's 88 and the
+     * four-bubble level's 96, so the shape level had visibly bigger bubbles than the three
+     * levels around it. The wide stage is 860x460 and wants its five spread across; the tall one
+     * is 550x780 and has to stack them 2-1-2, because three abreast in 550 units leaves 176
+     * between centres and a bubble is 192 across.
+     *
+     * The four-bubble table happens to work on both and is repeated rather than shared, so each
+     * layout can be read and tuned without cross-referencing the other.
+     */
+    spots: Record<number, [number, number][]>;
+  };
   hud: {
     starSize: number;
     /**
@@ -185,20 +206,29 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
     blockHome: { x: 500, y: 225 },
     critter: { x: 570, y: 60, width: 400 },
     menu: {
-      card: { width: 420, height: 150, gap: 24, left: 63, top: 176 },
-      cols: 2,
+      /*
+       * 4x2. Four 199s and three 22s span 862 of the 864 the two-column grid used to, so the
+       * picker still sits in the same margins — it just holds eight cards instead of six.
+       *
+       * 216 tall is set by the tallest card's contents at this width: 24 of padding, a 76 icon,
+       * three gaps, a 26 title, up to three wrapped lines of 15px blurb, and the 18px star line.
+       * The colour card is the one that needs all three blurb lines.
+       */
+      card: { width: 199, height: 216, gap: 22, left: 64, top: 150 },
+      cols: 4,
       titleSize: 68,
       scoreSize: 40,
+      iconSize: 76,
       /*
-       * Three animals rather than the four the full-width banner had, at 56 rather than 64. A
-       * third of the row is 272 units and the card's padding leaves 248 of it; four heads at 64
-       * tall run to 304 and pushed the title off the card.
+       * Three heads at 46. The card leaves 175 units inside its padding and a head is 1.18x as
+       * wide as it is tall, so three at 46 come to 166 — the widest that still clears.
        */
-      stripHeight: 56,
+      stripHeight: 46,
       stripCount: 3,
-      extraTitleSize: 30,
-      extraBlurbSize: 17,
-      categorySize: 21,
+      cardTitleSize: 26,
+      cardBlurbSize: 15,
+      statusSize: 18,
+      categorySize: 20,
       extraGap: 44,
     },
     memory: {
@@ -221,6 +251,28 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
       area: { left: 60, top: 146, width: 880, height: 424 },
       score: { left: 90, width: 400, height: 90, gap: 22 },
     },
+    /* Below the head and the printed prompt, which together take the top 200. */
+    bubbles: {
+      area: { left: 70, top: 210, width: 860, height: 460 },
+      /* Spread across the width, which is what this stage has. Both tables keep every spot at
+         least 96 units from an edge, because that is the bubble radius the cap allows and the
+         edge distance is what binds first on a 460-tall area. */
+      spots: {
+        4: [
+          [0.22, 0.26],
+          [0.74, 0.22],
+          [0.26, 0.76],
+          [0.78, 0.72],
+        ],
+        5: [
+          [0.18, 0.3],
+          [0.5, 0.22],
+          [0.82, 0.32],
+          [0.28, 0.76],
+          [0.72, 0.78],
+        ],
+      },
+    },
     hud: { starSize: 30, stack: false },
   },
 
@@ -240,22 +292,22 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
     critter: { x: 240, y: 170, width: 380 },
     menu: {
       /*
-       * One column. Two 420-wide cards do not fit across 640, and narrowing them wraps all
-       * three lines of text inside — see the note on CARD in Menu.tsx.
+       * 2x4. Two 230s and a 20 span the same 480 the single column did, and the narrow card
+       * shape is what makes two of them fit where one used to.
+       *
+       * 205 tall rather than the landscape 216: at 230 wide the blurbs wrap to two lines instead
+       * of three, so the card needs one line less.
        */
-      card: { width: 480, height: 160, gap: 20, left: 80, top: 170 },
-      cols: 1,
+      card: { width: 230, height: 205, gap: 20, left: 80, top: 130 },
+      cols: 2,
       titleSize: 46,
       scoreSize: 32,
-      /*
-       * Two animals at 38, down from two at 52, for the same reason the type shrank: a third of
-       * this row is 147 units and the card's padding leaves 123 of it. Two heads at 52 tall are
-       * 122 wide plus their gap, which is over by just enough to clip the second one.
-       */
-      stripHeight: 38,
-      stripCount: 2,
-      extraTitleSize: 22,
-      extraBlurbSize: 13,
+      iconSize: 72,
+      stripHeight: 50,
+      stripCount: 3,
+      cardTitleSize: 25,
+      cardBlurbSize: 14,
+      statusSize: 17,
       categorySize: 15,
       extraGap: 44,
     },
@@ -272,6 +324,26 @@ const LAYOUTS: Record<Orientation, LayoutSpec> = {
     boxes: {
       area: { left: 40, top: 190, width: 560, height: 700 },
       score: { left: 40, width: 260, height: 120, gap: 22 },
+    },
+    bubbles: {
+      area: { left: 45, top: 250, width: 550, height: 780 },
+      /* Stacked 2-1-2 down the height, because the width cannot take three abreast at full
+         bubble size. The middle bubble is centred, which is also the easiest one to reach. */
+      spots: {
+        4: [
+          [0.22, 0.26],
+          [0.74, 0.22],
+          [0.26, 0.76],
+          [0.78, 0.72],
+        ],
+        5: [
+          [0.24, 0.14],
+          [0.76, 0.16],
+          [0.5, 0.42],
+          [0.24, 0.72],
+          [0.76, 0.74],
+        ],
+      },
     },
     hud: { starSize: 26, stack: true },
   },
@@ -312,42 +384,51 @@ export const CRITTER = { x: 0, y: 0, width: 0 };
 export const MENU = {
   card: { width: 0, height: 0, gap: 0, left: 0, top: 0 },
   cols: 1,
+  rows: 1,
   titleSize: 0,
   scoreSize: 0,
+  iconSize: 0,
   stripHeight: 0,
   stripCount: 0,
-  extraTitleSize: 0,
-  extraBlurbSize: 0,
+  cardTitleSize: 0,
+  cardBlurbSize: 0,
+  statusSize: 0,
   categorySize: 0,
   extraGap: 0,
-  /** The bottom row, spanning the whole card grid. See the note in Menu.tsx. */
-  wideWidth: 0,
-  wideTop: 0,
-  /**
-   * One of the THREE cards that share the bottom row: the park, the memory board and the boxes
-   * game.
-   *
-   * They share a row rather than taking one each, and that is a space constraint as much as a
-   * design one. Both pickers are already full to the bottom of the stage — the landscape one
-   * ends 34 units short of 720 and the portrait one 68 short of 1138 — so there is nowhere for
-   * a fourth row to go, and shortening every card to make one would reflow the text inside all
-   * seven. Three across costs only the width of the row that was already there.
-   */
-  extraWidth: 0,
 };
 
-/** How many cards share the picker's bottom row. See `extraWidth`. */
-export const EXTRA_CARDS = 3;
+/**
+ * How many cards the picker holds: four learning games, then bubbles, the park, the memory board
+ * and boxes.
+ *
+ * A CONSTANT AND NOT `TRACKS.length + 3`, because the grid geometry is decided from it in
+ * stage.ts and stage.ts must not import the game lists — tracks.ts already imports from here.
+ * Menu.tsx asserts the slot list it renders is this long, so the two cannot drift apart
+ * silently.
+ */
+export const MENU_SLOTS = 8;
 
 /**
- * The left edge of one of the bottom row's slots, numbered left to right.
+ * Where one picker card goes, by slot, left to right then top to bottom.
  *
- * Here rather than in Menu.tsx because two things need it and have to agree exactly: the card,
- * and the category heading sitting directly over it. Working it out twice is how a heading ends
- * up four units off the card it is labelling.
+ * Here rather than in Menu.tsx because three things need it and have to agree exactly: the card,
+ * the category heading sitting directly over one, and the grid's own height. Working it out
+ * twice is how a heading ends up four units off the card it labels.
+ *
+ * The LAST ROW is pushed down by `extraGap` instead of an ordinary gap, which is the band the
+ * category heading lives in. Slot 7 is the last column of the last row on both stages — 4x2 and
+ * 2x4 both put it there — so Boxes is under that band whichever way the tablet is held.
  */
-export const extraSlotLeft = (slot: number): number =>
-  MENU.card.left + slot * (MENU.extraWidth + MENU.card.gap);
+export const menuSlot = (slot: number): { left: number; top: number } => {
+  const row = Math.floor(slot / MENU.cols);
+  const col = slot % MENU.cols;
+  const band = row === MENU.rows - 1 ? MENU.extraGap - MENU.card.gap : 0;
+
+  return {
+    left: MENU.card.left + col * (MENU.card.width + MENU.card.gap),
+    top: MENU.card.top + row * (MENU.card.height + MENU.card.gap) + band,
+  };
+};
 
 /** Top-bar geometry. See the note on `stack`. */
 export const HUD = { starSize: 0, stack: false };
@@ -444,6 +525,68 @@ export const boxesGrid = (
   };
 };
 
+const BUBBLE_AREA = { left: 0, top: 0, width: 0, height: 0 };
+
+/**
+ * The active layout's scatter. See `spots` in the layout spec for why it is per layout.
+ *
+ * Which TOKEN lands in which position is shuffled every round (see components/Bubbles.tsx); the
+ * positions themselves are fixed, which is what keeps them from overlapping.
+ */
+let bubbleTable: Record<number, [number, number][]> = {};
+
+/**
+ * A cap on how big a bubble gets, in logical units.
+ *
+ * Without it the four-bubble level draws them at whatever its wider spacing allows, which is
+ * over 130 — four balloons filling the screen, visibly a different game from the five-bubble
+ * levels either side of it. The cap keeps bubble size roughly constant across the four levels
+ * and lets the spacing change instead.
+ */
+const MAX_BUBBLE_R = 96;
+
+/**
+ * Where this round's bubbles go, and how big they are.
+ *
+ * THE RADIUS IS DERIVED, not authored, and that is what makes the table above safe to edit. It
+ * is bounded by two things at once: 0.42 of the closest distance between any two positions, so
+ * no two bubbles can touch however the table is rearranged; and the distance from the nearest
+ * position to the edge of the area, so none can be drawn half outside it. Authoring the radius
+ * separately is how a nudged position silently produces two overlapping tap targets.
+ */
+export const bubbleSpots = (
+  count: number,
+): { r: number; spots: { x: number; y: number }[] } => {
+  const table = bubbleTable[count] ?? bubbleTable[4];
+  const spots = table.map(([fx, fy]) => ({
+    x: BUBBLE_AREA.left + fx * BUBBLE_AREA.width,
+    y: BUBBLE_AREA.top + fy * BUBBLE_AREA.height,
+  }));
+
+  let closest = Infinity;
+  for (let i = 0; i < spots.length; i++) {
+    for (let j = i + 1; j < spots.length; j++) {
+      closest = Math.min(
+        closest,
+        Math.hypot(spots[i].x - spots[j].x, spots[i].y - spots[j].y),
+      );
+    }
+  }
+
+  const toEdge = Math.min(
+    ...spots.map((p) =>
+      Math.min(
+        p.x - BUBBLE_AREA.left,
+        BUBBLE_AREA.left + BUBBLE_AREA.width - p.x,
+        p.y - BUBBLE_AREA.top,
+        BUBBLE_AREA.top + BUBBLE_AREA.height - p.y,
+      ),
+    ),
+  );
+
+  return { r: Math.min(closest * 0.42, toEdge, MAX_BUBBLE_R), spots };
+};
+
 let cols = 1;
 let rowPitch = 0;
 let colGap = 0;
@@ -471,33 +614,16 @@ export const applyLayout = (next: Orientation): void => {
     cols: spec.menu.cols,
     titleSize: spec.menu.titleSize,
     scoreSize: spec.menu.scoreSize,
+    iconSize: spec.menu.iconSize,
     stripHeight: spec.menu.stripHeight,
     stripCount: spec.menu.stripCount,
-    extraTitleSize: spec.menu.extraTitleSize,
-    extraBlurbSize: spec.menu.extraBlurbSize,
+    cardTitleSize: spec.menu.cardTitleSize,
+    cardBlurbSize: spec.menu.cardBlurbSize,
+    statusSize: spec.menu.statusSize,
     categorySize: spec.menu.categorySize,
     extraGap: spec.menu.extraGap,
-    wideWidth:
-      spec.menu.card.width * spec.menu.cols +
-      spec.menu.card.gap * (spec.menu.cols - 1),
-    /*
-     * Below however many rows the four track cards take at this column count, plus the band the
-     * category heading sits in.
-     *
-     * Note the gap count: `card.gap` goes BETWEEN the track rows, so there are rows-1 of them
-     * and then `extraGap` once. The old form multiplied the gap by the row count, which
-     * happened to give the right answer only because it was standing in for this band.
-     */
-    wideTop:
-      spec.menu.card.top +
-      spec.menu.card.height * Math.ceil(4 / spec.menu.cols) +
-      spec.menu.card.gap * (Math.ceil(4 / spec.menu.cols) - 1) +
-      spec.menu.extraGap,
-    extraWidth:
-      (spec.menu.card.width * spec.menu.cols +
-        spec.menu.card.gap * (spec.menu.cols - 1) -
-        spec.menu.card.gap * (EXTRA_CARDS - 1)) /
-      EXTRA_CARDS,
+    /* Derived rather than authored, so a column count can never disagree with a row count. */
+    rows: Math.ceil(MENU_SLOTS / spec.menu.cols),
   });
 
   Object.assign(HUD, spec.hud);
@@ -507,6 +633,8 @@ export const applyLayout = (next: Orientation): void => {
 
   Object.assign(BOXES_AREA, spec.boxes.area);
   Object.assign(BOXES_SCORE, spec.boxes.score);
+  Object.assign(BUBBLE_AREA, spec.bubbles.area);
+  bubbleTable = spec.bubbles.spots;
 
   cols = spec.cols;
   rowPitch = spec.rowPitch;
